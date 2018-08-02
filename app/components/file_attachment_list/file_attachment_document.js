@@ -28,6 +28,7 @@ import {changeOpacity} from 'app/utils/theme';
 import LocalConfig from 'assets/config';
 
 import FileAttachmentIcon from './file_attachment_icon';
+import {Client4} from "mattermost-redux/client/index";
 
 const {DOCUMENTS_PATH} = DeviceTypes;
 
@@ -139,8 +140,11 @@ export default class FileAttachmentDocument extends PureComponent {
             if (exist) {
                 openDocument(file, 0);
             } else {
+                const headers = {
+                    Authorization: `Basic ${Client4.getAuth()}`,
+                };
                 this.setState({downloading: true});
-                this.downloadTask = RNFetchBlob.config(options).fetch('GET', getFileUrl(data.id));
+                this.downloadTask = RNFetchBlob.config(options).fetch('GET', getFileUrl(data.id), headers);
                 this.downloadTask.progress((received, total) => {
                     const progress = (received / total) * 100;
                     if (this.mounted) {

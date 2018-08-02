@@ -311,7 +311,11 @@ export default class Downloader extends PureComponent {
                 options.appendExt = data.extension;
             }
 
-            this.downloadTask = RNFetchBlob.config(options).fetch('GET', imageUrl);
+            const headers = {
+                Authorization: `Basic ${Client4.getAuth()}`,
+            };
+
+            this.downloadTask = RNFetchBlob.config(options).fetch('GET', imageUrl, headers);
             this.downloadTask.progress((received, total) => {
                 const progress = (received / total) * 100;
                 if (this.mounted) {

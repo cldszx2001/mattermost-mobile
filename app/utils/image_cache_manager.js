@@ -9,6 +9,7 @@ import {DeviceTypes} from 'app/constants';
 import mattermostBucket from 'app/mattermost_bucket';
 
 import LocalConfig from 'assets/config';
+import {Client4} from "mattermost-redux/client/index";
 
 const {IMAGES_PATH} = DeviceTypes;
 
@@ -44,7 +45,11 @@ export default class ImageCacheManager {
                     certificate,
                 };
 
-                this.downloadTask = await RNFetchBlob.config(options).fetch('GET', uri);
+                const headers = {
+                    Authorization: `Basic ${Client4.getAuth()}`,
+                };
+
+                this.downloadTask = await RNFetchBlob.config(options).fetch('GET', uri, headers);
                 if (this.downloadTask.respInfo.respType === 'text') {
                     throw new Error();
                 }

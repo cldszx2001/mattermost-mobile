@@ -194,7 +194,7 @@ export default class EditProfile extends PureComponent {
         const fileData = buildFileUploadData(profileImage);
 
         const headers = {
-            Authorization: `Bearer ${Client4.getToken()}`,
+            Authorization: `Basic ${Client4.getAuth()},Bearer ${Client4.getToken()}`,
             'Content-Type': 'multipart/form-data',
         };
 

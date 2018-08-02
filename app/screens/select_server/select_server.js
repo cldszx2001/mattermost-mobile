@@ -15,6 +15,7 @@ import {
     Text,
     TouchableWithoutFeedback,
     View,
+    AlertIOS,
 } from 'react-native';
 import Button from 'react-native-button';
 import RNFetchBlob from 'react-native-fetch-blob';
@@ -329,6 +330,24 @@ export default class SelectServer extends PureComponent {
                 setServerVersion(Client4.getServerVersion());
             }
 
+            if (result.error) {
+                AlertIOS.prompt(
+                    'Login & Password',
+                    'gateway userId and password required.' +
+                    'please input after, Connect button press again',
+                    [
+                        {
+                            text: 'Cancel',
+                            style: 'cancel',
+                        },
+                        {
+                            text: 'OK',
+                            onPress: this.saveGateWayUserIdAndPassword,
+                        },
+                    ],
+                    'login-password');
+            }
+
             this.setState({
                 connected: !result.error,
                 connecting: false,
@@ -343,6 +362,11 @@ export default class SelectServer extends PureComponent {
                 connecting: false,
             });
         });
+    };
+
+    saveGateWayUserIdAndPassword = (promptValue) => {
+        const {login, password} = promptValue;
+        Client4.setAuth(login, password);
     };
 
     inputRef = (ref) => {

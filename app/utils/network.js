@@ -5,6 +5,9 @@ import {NetInfo} from 'react-native';
 import RNFetchBlob from 'react-native-fetch-blob';
 
 import {Client4} from 'mattermost-redux/client';
+import mattermostBucket from 'app/mattermost_bucket';
+
+import LocalConfig from 'assets/config';
 
 const PING_TIMEOUT = 10000;
 
@@ -17,8 +20,10 @@ export async function checkConnection(isConnected) {
     // Ping the Mattermost server to detect if the we have network connection even if the websocket cannot connect
     const server = `${Client4.getBaseRoute()}/system/ping?time=${Date.now()}`;
 
+    const certificate = await mattermostBucket.getPreference('cert', LocalConfig.AppGroupId);
+
     try {
-        await RNFetchBlob.config({timeout: PING_TIMEOUT}).fetch('GET', server);
+        await RNFetchBlob.config({timeout: PING_TIMEOUT, certificate}).fetch('GET', server);
         return true;
     } catch (error) {
         return false;

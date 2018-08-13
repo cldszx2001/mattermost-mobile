@@ -14,6 +14,9 @@ import FileAttachmentIcon from 'app/components/file_attachment_list/file_attachm
 import FileUploadRetry from 'app/components/file_upload_preview/file_upload_retry';
 import FileUploadRemove from 'app/components/file_upload_preview/file_upload_remove';
 import {buildFileUploadData, encodeHeaderURIStringToUTF8} from 'app/utils/file';
+import mattermostBucket from 'app/mattermost_bucket';
+
+import LocalConfig from 'assets/config';
 
 export default class FileUploadItem extends PureComponent {
     static propTypes = {
@@ -110,7 +113,7 @@ export default class FileUploadItem extends PureComponent {
         return false;
     };
 
-    uploadFile = () => {
+    uploadFile = async () => {
         const {channelId, file} = this.props;
         const fileData = buildFileUploadData(file);
 
@@ -134,7 +137,8 @@ export default class FileUploadItem extends PureComponent {
 
         Client4.trackEvent('api', 'api_files_upload');
 
-        this.uploadPromise = RNFetchBlob.fetch('POST', Client4.getFilesRoute(), headers, data);
+        const certificate = await mattermostBucket.getPreference('cert', LocalConfig.AppGroupId);
+        this.uploadPromise = RNFetchBlob.config({certificate}).fetch('POST', Client4.getFilesRoute(), headers, data);
         this.uploadPromise.uploadProgress(this.handleUploadProgress);
         this.uploadPromise.then(this.handleUploadCompleted).catch(this.handleUploadError);
     };

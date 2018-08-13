@@ -22,6 +22,9 @@ import ProfilePicture from 'app/components/profile_picture';
 import AttachmentButton from 'app/components/attachment_button';
 
 import EditProfileItem from './edit_profile_item';
+import mattermostBucket from 'app/mattermost_bucket';
+
+import LocalConfig from 'assets/config';
 
 const holders = {
     firstName: {
@@ -188,7 +191,7 @@ export default class EditProfile extends PureComponent {
         this.emitCanUpdateAccount(true);
     };
 
-    uploadProfileImage = () => {
+    uploadProfileImage = async () => {
         const {profileImage} = this.state;
         const {currentUser} = this.props;
         const fileData = buildFileUploadData(profileImage);
@@ -205,7 +208,8 @@ export default class EditProfile extends PureComponent {
             type: fileData.type,
         };
 
-        return RNFetchBlob.fetch('POST', `${Client4.getUserRoute(currentUser.id)}/image`, headers, [fileInfo]);
+        const certificate = await mattermostBucket.getPreference('cert', LocalConfig.AppGroupId);
+        return RNFetchBlob.config({certificate}).fetch('POST', `${Client4.getUserRoute(currentUser.id)}/image`, headers, [fileInfo]);
     };
 
     updateField = (field) => {

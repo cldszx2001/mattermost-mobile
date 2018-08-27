@@ -11,7 +11,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.mattermost.rnbeta</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -73,7 +73,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Send voice messages to your Mattermost instance</string>
 	<key>SharedAccessGroup</key>
-	<string>$(AppIdentifierPrefix)com.mattermost.rnbeta</string>
+	<string>$(AppIdentifierPrefix)cloud.aslead.beta.mattermost</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Entypo.ttf</string>

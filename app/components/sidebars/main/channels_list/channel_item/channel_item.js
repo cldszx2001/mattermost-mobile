@@ -111,6 +111,10 @@ export default class ChannelItem extends PureComponent {
             return null;
         }
 
+        if (!this.props.displayName) {
+            return null;
+        }
+
         const {intl} = this.context;
 
         let channelDisplayName = displayName;

@@ -139,16 +139,13 @@ export default class ChannelSidebar extends Component {
             drawerOpened: false,
         });
         this.resetDrawer();
+        Keyboard.dismiss();
     };
 
     handleDrawerOpen = () => {
         this.setState({
             drawerOpened: true,
         });
-
-        if (this.state.openDrawerOffset !== 0) {
-            Keyboard.dismiss();
-        }
     };
 
     handleUpdateTitle = (channel) => {
@@ -180,6 +177,20 @@ export default class ChannelSidebar extends Component {
         tracker.channelSwitch = Date.now();
 
         this.closeChannelDrawer();
+
+        if (!channel) {
+            const utils = require('app/utils/general');
+            const {intl} = this.context;
+
+            const unableToJoinMessage = {
+                id: 'mobile.open_unknown_channel.error',
+                defaultMessage: "We couldn't join the channel. Please reset the cache and try again.",
+            };
+            const erroMessage = {};
+
+            utils.alertErrorWithFallback(intl, erroMessage, unableToJoinMessage);
+            return;
+        }
 
         setChannelLoading(channel.id !== currentChannelId);
         setChannelDisplayName(channel.display_name);

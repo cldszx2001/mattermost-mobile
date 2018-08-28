@@ -2,7 +2,7 @@
 // See LICENSE.txt for license information.
 
 /* eslint-disable global-require*/
-import {AsyncStorage, Linking, NativeModules} from 'react-native';
+import {AsyncStorage, Linking, NativeModules, Platform} from 'react-native';
 import {setGenericPassword, getGenericPassword, resetGenericPassword} from 'react-native-keychain';
 
 import {loadMe} from 'mattermost-redux/actions/users';
@@ -50,6 +50,14 @@ export default class App {
         this.currentUserId = null;
         this.token = null;
         this.url = null;
+
+        // Load polyfill for iOS 9
+        if (Platform.OS === 'ios') {
+            const majorVersionIOS = parseInt(Platform.Version, 10);
+            if (majorVersionIOS < 10) {
+                require('babel-polyfill');
+            }
+        }
 
         // Usage deeplinking
         Linking.addEventListener('url', this.handleDeepLink);
@@ -161,6 +169,7 @@ export default class App {
         if (!currentUserId) {
             return;
         }
+
         const username = `${deviceToken}, ${currentUserId}`;
         const password = `${token},${url}`;
 
@@ -172,7 +181,11 @@ export default class App {
 
         // Only save to keychain if the url and token are set
         if (url && token) {
-            setGenericPassword(username, password);
+            try {
+                setGenericPassword(username, password);
+            } catch (e) {
+                console.warn('could not set credentials', e); //eslint-disable-line no-console
+            }
         }
     };
 
@@ -254,7 +267,13 @@ export default class App {
         if (this.token && this.url) {
             screen = 'Channel';
             tracker.initialLoad = Date.now();
-            dispatch(loadMe());
+
+            try {
+                dispatch(loadMe());
+            } catch (e) {
+                // Fall through since we should have a previous version of the current user because we have a token
+                console.warn('Failed to load current user when starting on Channel screen', e); // eslint-disable-line no-console
+            }
         }
 
         switch (screen) {

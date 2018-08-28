@@ -94,10 +94,14 @@ class SSO extends PureComponent {
     }
 
     componentDidMount() {
-        InteractionManager.runAfterInteractions(() => {
+        InteractionManager.runAfterInteractions(this.clearPreviousCookies);
+    }
+
+    clearPreviousCookies = () => {
+        CookieManager.clearAll().then(() => {
             this.setState({renderWebView: true});
         });
-    }
+    };
 
     goToLoadTeam = (expiresAt) => {
         const {intl, navigator} = this.props;
@@ -187,10 +191,16 @@ class SSO extends PureComponent {
                     setStoreFromLocalData({url: this.props.serverUrl, token}).
                         then(handleSuccessfulLogin).
                         then(getSession).
-                        then(this.goToLoadTeam);
+                        then(this.goToLoadTeam).
+                        catch(this.onLoadEndError);
                 }
             });
         }
+    };
+
+    onLoadEndError = (e) => {
+        console.warn('Failed to set store from local data', e); // eslint-disable-line no-console
+        this.setState({error: e.message});
     };
 
     renderLoading = () => {

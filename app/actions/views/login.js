@@ -3,6 +3,7 @@
 
 import {getDataRetentionPolicy} from 'mattermost-redux/actions/general';
 import {GeneralTypes} from 'mattermost-redux/action_types';
+import {getSessions} from 'mattermost-redux/actions/users';
 import {autoUpdateTimezone} from 'mattermost-redux/actions/timezone';
 import {Client4} from 'mattermost-redux/client';
 import {getConfig, getLicense} from 'mattermost-redux/selectors/entities/general';
@@ -70,18 +71,27 @@ export function getSession() {
     return async (dispatch, getState) => {
         const state = getState();
         const {currentUserId} = state.entities.users;
-        const {credentials} = state.entities.general;
-        const token = credentials && credentials.token;
+        const {deviceToken} = state.entities.general;
 
-        if (currentUserId && token) {
-            const session = await Client4.getSessions(currentUserId, token);
-            if (Array.isArray(session) && session[0]) {
-                const s = session[0];
-                return s.expires_at;
-            }
+        if (!currentUserId || !deviceToken) {
+            return 0;
         }
 
-        return false;
+        let sessions;
+        try {
+            sessions = await dispatch(getSessions(currentUserId));
+        } catch (e) {
+            console.warn('Failed to get current session', e); // eslint-disable-line no-console
+            return 0;
+        }
+
+        if (!Array.isArray(sessions.data)) {
+            return 0;
+        }
+
+        const session = sessions.data.find((s) => s.device_id === deviceToken);
+
+        return session && session.expires_at ? session.expires_at : 0;
     };
 }
 

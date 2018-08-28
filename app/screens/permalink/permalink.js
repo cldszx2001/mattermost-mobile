@@ -114,10 +114,6 @@ export default class Permalink extends PureComponent {
     }
 
     componentWillReceiveProps(nextProps) {
-        if (nextProps.channelId === '' && this.mounted) {
-            this.handleClose();
-        }
-
         if (this.props.channelName !== nextProps.channelName && this.mounted) {
             this.setState({title: nextProps.channelName});
         }
@@ -269,8 +265,9 @@ export default class Permalink extends PureComponent {
         }
 
         if (!channelId) {
-            focusChannelId = post.data.posts[focusedPostId].channel_id;
-            if (!this.props.myMembers[focusChannelId]) {
+            const focusedPost = post.data.posts[focusedPostId];
+            focusChannelId = focusedPost ? focusedPost.channel_id : '';
+            if (focusChannelId && !this.props.myMembers[focusChannelId]) {
                 const {data: channel} = await actions.getChannel(focusChannelId);
                 if (channel && channel.type === General.OPEN_CHANNEL) {
                     await actions.joinChannel(currentUserId, channel.team_id, channel.id);

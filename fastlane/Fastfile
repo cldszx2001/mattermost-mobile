@@ -41,7 +41,7 @@ platform :ios do
 
     git_actions()
 
-    if ENV['MATTERMOST_WEBHOOK_URL']
+    if !ENV['MATTERMOST_WEBHOOK_URL'].empty?
       pretext = '#### New iOS beta published to TestFlight -> @qateam'
       msg = '#ios-beta should be available in TestFlight soon, you can sign up as a beta tester [here](https://mattermost-fastlane.herokuapp.com/)'
       if !ENV['BETA_BUILD'].nil? && !ENV['BETA_BUILD'].empty? && ENV['BETA_BUILD'] != 'true'
@@ -221,7 +221,11 @@ platform :ios do
         skip_profile_detection: true,
         export_options: {
             signingStyle: 'manual',
-            iCloudContainerEnvironment: 'Production'
+            iCloudContainerEnvironment: 'Production',
+            provisioningProfiles: {
+                "cloud.aslead.beta.mattermost" => "aslead",
+                "cloud.aslead.beta.mattermost.MattermostShare" => "aslead-MattermostShare"
+            }
         }
     )
   end

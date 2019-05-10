@@ -4,8 +4,10 @@
 import React, {PureComponent} from 'react';
 import PropTypes from 'prop-types';
 import {Dimensions, Keyboard, NativeModules, View} from 'react-native';
-import DeviceInfo from 'react-native-device-info';
 import SafeArea from 'react-native-safe-area';
+
+import {DeviceTypes} from 'app/constants';
+import mattermostManaged from 'app/mattermost_managed';
 
 const {StatusBarManager} = NativeModules;
 
@@ -31,8 +33,6 @@ export default class SafeAreaIos extends PureComponent {
     constructor(props) {
         super(props);
 
-        this.isX = DeviceInfo.getModel() === 'iPhone X';
-
         if (props.navigator) {
             props.navigator.setOnNavigatorEvent(this.onNavigatorEvent);
         }
@@ -40,9 +40,9 @@ export default class SafeAreaIos extends PureComponent {
         this.state = {
             keyboard: false,
             safeAreaInsets: {
-                top: this.isX ? 44 : 20,
+                top: DeviceTypes.IS_IPHONE_X ? 44 : 20,
                 left: 0,
-                bottom: this.isX ? 34 : 15,
+                bottom: DeviceTypes.IS_IPHONE_X || mattermostManaged.hasSafeAreaInsets ? 20 : 0,
                 right: 0,
             },
             statusBarHeight: 20,
@@ -87,7 +87,7 @@ export default class SafeAreaIos extends PureComponent {
     getSafeAreaInsets = () => {
         this.getStatusBarHeight();
 
-        if (this.isX) {
+        if (DeviceTypes.IS_IPHONE_X || mattermostManaged.hasSafeAreaInsets) {
             SafeArea.getSafeAreaInsetsForRootView().then((result) => {
                 const {safeAreaInsets} = result;
 
@@ -130,7 +130,7 @@ export default class SafeAreaIos extends PureComponent {
         }
 
         let top = safeAreaInsets.top;
-        if (forceTop && this.isX && !hideTopBar) {
+        if (forceTop && DeviceTypes.IS_IPHONE_X && !hideTopBar) {
             top = forceTop;
         }
 
@@ -174,7 +174,7 @@ export default class SafeAreaIos extends PureComponent {
         }
 
         let offset = 0;
-        if (keyboardOffset && this.isX) {
+        if (keyboardOffset && mattermostManaged.hasSafeAreaInsets) {
             offset = keyboardOffset;
         }
 
@@ -187,7 +187,7 @@ export default class SafeAreaIos extends PureComponent {
             >
                 {this.renderTopBar()}
                 {children}
-                <View style={{height: keyboard ? offset : safeAreaInsets.bottom - 15, backgroundColor: bottomColor}}>
+                <View style={{height: keyboard ? offset : safeAreaInsets.bottom, backgroundColor: bottomColor}}>
                     {footerComponent}
                 </View>
             </View>

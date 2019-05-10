@@ -1,20 +1,18 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {GeneralTypes, PostTypes} from 'mattermost-redux/action_types';
+import {GeneralTypes} from 'mattermost-redux/action_types';
 import {Client4} from 'mattermost-redux/client';
 import {General} from 'mattermost-redux/constants';
-import {fetchMyChannelsAndMembers, markChannelAsRead} from 'mattermost-redux/actions/channels';
+import {fetchMyChannelsAndMembers} from 'mattermost-redux/actions/channels';
 import {getClientConfig, getDataRetentionPolicy, getLicenseConfig} from 'mattermost-redux/actions/general';
+import {receivedNewPost} from 'mattermost-redux/actions/posts';
 import {getMyTeams, getMyTeamMembers, selectTeam} from 'mattermost-redux/actions/teams';
 
 import {ViewTypes} from 'app/constants';
 import {recordTime} from 'app/utils/segment';
 
-import {
-    handleSelectChannel,
-    setChannelDisplayName,
-} from 'app/actions/views/channel';
+import {handleSelectChannel} from 'app/actions/views/channel';
 
 export function startDataCleanup() {
     return async (dispatch, getState) => {
@@ -49,12 +47,12 @@ export function loadConfigAndLicense() {
     };
 }
 
-export function loadFromPushNotification(notification) {
+export function loadFromPushNotification(notification, startAppFromPushNotification) {
     return async (dispatch, getState) => {
         const state = getState();
         const {data} = notification;
         const {currentTeamId, teams, myMembers: myTeamMembers} = state.entities.teams;
-        const {currentChannelId, channels} = state.entities.channels;
+        const {channels} = state.entities.channels;
 
         let channelId = '';
         let teamId = currentTeamId;
@@ -86,15 +84,7 @@ export function loadFromPushNotification(notification) {
             dispatch(selectTeam({id: teamId}));
         }
 
-        // mark channel as read
-        dispatch(markChannelAsRead(channelId, channelId === currentChannelId ? null : currentChannelId, false));
-
-        if (channelId !== currentChannelId) {
-            // when the notification is from a channel other than the current channel
-            dispatch(markChannelAsRead(channelId, currentChannelId, false));
-            dispatch(setChannelDisplayName(''));
-            dispatch(handleSelectChannel(channelId));
-        }
+        dispatch(handleSelectChannel(channelId, startAppFromPushNotification));
     };
 }
 
@@ -105,7 +95,7 @@ export function purgeOfflineStore() {
 // A non-optimistic version of the createPost action in mattermost-redux with the file handling
 // removed since it's not needed.
 export function createPostForNotificationReply(post) {
-    return (dispatch, getState) => {
+    return async (dispatch, getState) => {
         const state = getState();
         const currentUserId = state.entities.users.currentUserId;
 
@@ -119,18 +109,14 @@ export function createPostForNotificationReply(post) {
             update_at: timestamp,
         };
 
-        return Client4.createPost({...newPost, create_at: 0}).then((payload) => {
-            dispatch({
-                type: PostTypes.RECEIVED_POSTS,
-                data: {
-                    order: [],
-                    posts: {
-                        [payload.id]: payload,
-                    },
-                },
-                channelId: payload.channel_id,
-            });
-        });
+        try {
+            const data = await Client4.createPost({...newPost, create_at: 0});
+            dispatch(receivedNewPost(data));
+
+            return {data};
+        } catch (error) {
+            return {error};
+        }
     };
 }
 

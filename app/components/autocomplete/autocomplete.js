@@ -8,29 +8,33 @@ import {
     Platform,
     View,
 } from 'react-native';
-import DeviceInfo from 'react-native-device-info';
 
+import {DeviceTypes} from 'app/constants';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
 
 import AtMention from './at_mention';
 import ChannelMention from './channel_mention';
 import EmojiSuggestion from './emoji_suggestion';
 import SlashSuggestion from './slash_suggestion';
+import DateSuggestion from './date_suggestion';
 
 export default class Autocomplete extends PureComponent {
     static propTypes = {
         cursorPosition: PropTypes.number.isRequired,
         deviceHeight: PropTypes.number,
         onChangeText: PropTypes.func.isRequired,
+        maxHeight: PropTypes.number,
         rootId: PropTypes.string,
         isSearch: PropTypes.bool,
         theme: PropTypes.object.isRequired,
         value: PropTypes.string,
+        enableDateSuggestion: PropTypes.bool.isRequired,
     };
 
     static defaultProps = {
         isSearch: false,
         cursorPosition: 0,
+        enableDateSuggestion: false,
     };
 
     state = {
@@ -38,8 +42,13 @@ export default class Autocomplete extends PureComponent {
         channelMentionCount: 0,
         emojiCount: 0,
         commandCount: 0,
+        dateCount: 0,
         keyboardOffset: 0,
     };
+
+    onChangeText = (value) => {
+        this.props.onChangeText(value, true);
+    }
 
     handleAtMentionCountChange = (atMentionCount) => {
         this.setState({atMentionCount});
@@ -55,6 +64,10 @@ export default class Autocomplete extends PureComponent {
 
     handleCommandCountChange = (commandCount) => {
         this.setState({commandCount});
+    };
+
+    handleIsDateFilterChange = (dateCount) => {
+        this.setState({dateCount});
     };
 
     componentWillMount() {
@@ -76,12 +89,21 @@ export default class Autocomplete extends PureComponent {
         this.setState({keyboardOffset: 0});
     };
 
-    listHeight() {
-        let offset = Platform.select({ios: 65, android: 75});
-        if (DeviceInfo.getModel() === 'iPhone X') {
-            offset = 90;
+    maxListHeight() {
+        let maxHeight;
+        if (this.props.maxHeight) {
+            maxHeight = this.props.maxHeight;
+        } else {
+            // List is expanding downwards, likely from the search box
+            let offset = Platform.select({ios: 65, android: 75});
+            if (DeviceTypes.IS_IPHONE_X) {
+                offset = 90;
+            }
+
+            maxHeight = this.props.deviceHeight - offset - this.state.keyboardOffset;
         }
-        return this.props.deviceHeight - offset - this.state.keyboardOffset;
+
+        return maxHeight;
     }
 
     render() {
@@ -97,37 +119,51 @@ export default class Autocomplete extends PureComponent {
         }
 
         // We always need to render something, but we only draw the borders when we have results to show
-        const {atMentionCount, channelMentionCount, emojiCount, commandCount} = this.state;
-        if (atMentionCount + channelMentionCount + emojiCount + commandCount > 0) {
+        const {atMentionCount, channelMentionCount, emojiCount, commandCount, dateCount} = this.state;
+        if (atMentionCount + channelMentionCount + emojiCount + commandCount + dateCount > 0) {
             if (this.props.isSearch) {
                 wrapperStyle.push(style.bordersSearch);
             } else {
                 containerStyle.push(style.borders);
             }
         }
-        const listHeight = this.listHeight();
+
+        const maxListHeight = this.maxListHeight();
 
         return (
             <View style={wrapperStyle}>
                 <View style={containerStyle}>
                     <AtMention
-                        listHeight={listHeight}
+                        maxListHeight={maxListHeight}
                         onResultCountChange={this.handleAtMentionCountChange}
                         {...this.props}
+                        onChangeText={this.onChangeText}
                     />
                     <ChannelMention
-                        listHeight={listHeight}
+                        maxListHeight={maxListHeight}
                         onResultCountChange={this.handleChannelMentionCountChange}
                         {...this.props}
+                        onChangeText={this.onChangeText}
                     />
                     <EmojiSuggestion
+                        maxListHeight={maxListHeight}
                         onResultCountChange={this.handleEmojiCountChange}
                         {...this.props}
+                        onChangeText={this.onChangeText}
                     />
                     <SlashSuggestion
+                        maxListHeight={maxListHeight}
                         onResultCountChange={this.handleCommandCountChange}
                         {...this.props}
+                        onChangeText={this.onChangeText}
                     />
+                    {(this.props.isSearch && this.props.enableDateSuggestion) &&
+                    <DateSuggestion
+                        onResultCountChange={this.handleIsDateFilterChange}
+                        {...this.props}
+                        onChangeText={this.onChangeText}
+                    />
+                    }
                 </View>
             </View>
         );
@@ -153,7 +189,6 @@ const getStyleFromTheme = makeStyleSheetFromTheme((theme) => {
         },
         container: {
             bottom: 0,
-            maxHeight: 200,
         },
         content: {
             flex: 1,

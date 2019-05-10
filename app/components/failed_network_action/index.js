@@ -7,6 +7,7 @@ import {TouchableOpacity, View} from 'react-native';
 
 import FormattedText from 'app/components/formatted_text';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
+import {t} from 'app/utils/i18n';
 
 import Cloud from './cloud';
 
@@ -14,6 +15,19 @@ export default class FailedNetworkAction extends PureComponent {
     static propTypes = {
         onRetry: PropTypes.func,
         theme: PropTypes.object.isRequired,
+        errorTitle: PropTypes.object,
+        errorDescription: PropTypes.object,
+    };
+
+    static defaultProps = {
+        errorTitle: {
+            id: t('mobile.failed_network_action.title'),
+            defaultMessage: 'No internet connection',
+        },
+        errorDescription: {
+            id: t('mobile.failed_network_action.description'),
+            defaultMessage: 'There seems to be a problem with your internet connection. Make sure you have an active connection and try again.',
+        },
     };
 
     render() {
@@ -28,13 +42,13 @@ export default class FailedNetworkAction extends PureComponent {
                     width={76}
                 />
                 <FormattedText
-                    id='mobile.failed_network_action.title'
-                    defaultMessage='No internet connection'
+                    id={this.props.errorTitle.id}
+                    defaultMessage={this.props.errorTitle.defaultMessage}
                     style={style.title}
                 />
                 <FormattedText
-                    id='mobile.failed_network_action.description'
-                    defaultMessage='There seems to be a problem with your internet connection. Make sure you have an active connection and try again.'
+                    id={this.props.errorDescription.id}
+                    defaultMessage={this.props.errorDescription.message}
                     style={style.description}
                 />
                 {onRetry &&

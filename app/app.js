@@ -2,7 +2,7 @@
 // See LICENSE.txt for license information.
 
 /* eslint-disable global-require*/
-import {AsyncStorage, Linking, NativeModules, Platform} from 'react-native';
+import {AsyncStorage, Linking, NativeModules, Platform, Text} from 'react-native';
 import {setGenericPassword, getGenericPassword, resetGenericPassword} from 'react-native-keychain';
 
 import {loadMe} from 'mattermost-redux/actions/users';
@@ -17,6 +17,7 @@ import {getCurrentLocale} from 'app/selectors/i18n';
 import {getTranslations as getLocalTranslations} from 'app/i18n';
 import {store, handleManagedConfig} from 'app/mattermost';
 import avoidNativeBridge from 'app/utils/avoid_native_bridge';
+import {setCSRFFromCookie} from 'app/utils/security';
 
 const {Initialization} = NativeModules;
 
@@ -51,20 +52,39 @@ export default class App {
         this.token = null;
         this.url = null;
 
-        // Load polyfill for iOS 9
-        if (Platform.OS === 'ios') {
-            const majorVersionIOS = parseInt(Platform.Version, 10);
-            if (majorVersionIOS < 10) {
-                require('babel-polyfill');
-            }
-        }
-
         // Usage deeplinking
         Linking.addEventListener('url', this.handleDeepLink);
 
+        this.setFontFamily();
         this.getStartupThemes();
         this.getAppCredentials();
     }
+
+    setFontFamily = () => {
+        // Set a global font for Android
+        if (Platform.OS === 'android') {
+            const defaultFontFamily = {
+                style: {
+                    fontFamily: 'Roboto',
+                },
+            };
+            const TextRender = Text.render;
+            const initialDefaultProps = Text.defaultProps;
+            Text.defaultProps = {
+                ...initialDefaultProps,
+                ...defaultFontFamily,
+            };
+            Text.render = function render(props, ...args) {
+                const oldProps = props;
+                let newProps = {...props, style: [defaultFontFamily.style, props.style]};
+                try {
+                    return Reflect.apply(TextRender, this, [newProps, ...args]);
+                } finally {
+                    newProps = oldProps;
+                }
+            };
+        }
+    };
 
     getTranslations = () => {
         if (this.translations) {
@@ -111,10 +131,13 @@ export default class App {
                         this.url = url;
                         Client4.setUrl(url);
                         Client4.setToken(token);
+                        await setCSRFFromCookie(url);
                     } else {
                         this.waitForRehydration = true;
                     }
                 }
+            } else {
+                this.waitForRehydration = false;
             }
         } catch (error) {
             return null;
@@ -285,7 +308,6 @@ export default class App {
             break;
         }
 
-        this.setStartAppFromPushNotification(false);
         this.setAppStarted(true);
     }
 }

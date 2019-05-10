@@ -3,7 +3,7 @@
 
 import React, {PureComponent} from 'react';
 import {NavigationActions} from 'react-navigation';
-import TouchableItem from 'react-navigation/src/views/TouchableItem';
+import TouchableItem from 'react-navigation-stack/dist/views/TouchableItem';
 import PropTypes from 'prop-types';
 import {intlShape} from 'react-intl';
 
@@ -13,18 +13,20 @@ import {
     PermissionsAndroid,
     ScrollView,
     Text,
+    TextInput,
     View,
 } from 'react-native';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import Video from 'react-native-video';
 import LocalAuth from 'react-native-local-auth';
-import RNFetchBlob from 'react-native-fetch-blob';
+import RNFetchBlob from 'rn-fetch-blob';
 
 import {Preferences} from 'mattermost-redux/constants';
 import {getFormattedFileSize, lookupMimeType} from 'mattermost-redux/utils/file_utils';
 
-import QuickTextInput from 'app/components/quick_text_input';
+import Loading from 'app/components/loading';
 import PaperPlane from 'app/components/paper_plane';
+import {MAX_FILE_COUNT} from 'app/constants/post_textbox';
 import mattermostManaged from 'app/mattermost_managed';
 import {getExtensionFromMime} from 'app/utils/file';
 import {emptyFunction} from 'app/utils/general';
@@ -42,7 +44,7 @@ import {
 import ChannelButton from './channel_button';
 import TeamButton from './team_button';
 
-const defalultTheme = Preferences.THEMES.default;
+const defaultTheme = Preferences.THEMES.default;
 const extensionSvg = {
     csv: ExcelSvg,
     pdf: PdfSvg,
@@ -58,7 +60,11 @@ const MAX_MESSAGE_LENGTH = 4000;
 
 export default class ExtensionPost extends PureComponent {
     static propTypes = {
-        channelId: PropTypes.string.isRequired,
+        actions: PropTypes.shape({
+            getTeamChannels: PropTypes.func.isRequired,
+        }).isRequired,
+        channelId: PropTypes.string,
+        channels: PropTypes.object.isRequired,
         currentUserId: PropTypes.string.isRequired,
         maxFileSize: PropTypes.number.isRequired,
         navigation: PropTypes.object.isRequired,
@@ -106,7 +112,7 @@ export default class ExtensionPost extends PureComponent {
                 >
                     <View style={styles.left}>
                         <PaperPlane
-                            color={defalultTheme.sidebarHeaderTextColor}
+                            color={defaultTheme.sidebarHeaderTextColor}
                             height={20}
                             width={20}
                         />
@@ -263,12 +269,14 @@ export default class ExtensionPost extends PureComponent {
     };
 
     loadData = async (items) => {
-        const {token, url} = this.props;
+        const {actions, maxFileSize, teamId, token, url} = this.props;
         if (token && url) {
             const text = [];
             const files = [];
             let totalSize = 0;
             let error;
+
+            actions.getTeamChannels(teamId);
 
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
@@ -280,7 +288,7 @@ export default class ExtensionPost extends PureComponent {
                     let fileSize = {size: 0};
                     const fullPath = item.value;
                     try {
-                        fileSize = await RNFetchBlob.fs.stat(fullPath);
+                        fileSize = await RNFetchBlob.fs.stat(fullPath); // eslint-disable-line no-await-in-loop
                     } catch (e) {
                         const {formatMessage} = this.context.intl;
                         error = formatMessage({
@@ -312,7 +320,7 @@ export default class ExtensionPost extends PureComponent {
 
             const value = text.join('\n');
 
-            if (!error) {
+            if (!error && files.length <= MAX_FILE_COUNT && totalSize <= maxFileSize) {
                 this.props.navigation.setParams({
                     post: this.onPost,
                 });
@@ -320,6 +328,7 @@ export default class ExtensionPost extends PureComponent {
 
             this.setState({error, files, value, hasPermission: true, totalSize});
         }
+        this.setState({loaded: true});
     };
 
     onClose = (data) => {
@@ -344,7 +353,10 @@ export default class ExtensionPost extends PureComponent {
 
     renderBody = () => {
         const {formatMessage} = this.context.intl;
-        const {value} = this.state;
+        const {channelId, value} = this.state;
+
+        const channel = this.props.channels[channelId];
+        const channelDisplayName = channel?.display_name || ''; //eslint-disable-line camelcase
 
         return (
             <ScrollView
@@ -352,7 +364,7 @@ export default class ExtensionPost extends PureComponent {
                 contentContainerStyle={styles.scrollView}
                 style={styles.flex}
             >
-                <QuickTextInput
+                <TextInput
                     ref={this.getInputRef}
                     autoCapitalize='sentences'
                     maxLength={MAX_MESSAGE_LENGTH}
@@ -360,8 +372,8 @@ export default class ExtensionPost extends PureComponent {
                     onBlur={this.handleBlur}
                     onChangeText={this.handleTextChange}
                     onFocus={this.handleFocus}
-                    placeholder={formatMessage({id: 'create_post.write', defaultMessage: 'Write a message...'})}
-                    placeholderTextColor={changeOpacity(defalultTheme.centerChannelColor, 0.5)}
+                    placeholder={formatMessage({id: 'create_post.write', defaultMessage: 'Write to {channelDisplayName}'}, {channelDisplayName})}
+                    placeholderTextColor={changeOpacity(defaultTheme.centerChannelColor, 0.5)}
                     style={styles.input}
                     underlineColorAndroid='transparent'
                     value={value}
@@ -378,7 +390,7 @@ export default class ExtensionPost extends PureComponent {
             <ChannelButton
                 channelId={channelId}
                 onPress={this.goToChannels}
-                theme={defalultTheme}
+                theme={defaultTheme}
             />
         );
     };
@@ -481,7 +493,7 @@ export default class ExtensionPost extends PureComponent {
             <TeamButton
                 onPress={this.goToTeams}
                 teamId={teamId}
-                theme={defalultTheme}
+                theme={defaultTheme}
             />
         );
     };
@@ -489,7 +501,13 @@ export default class ExtensionPost extends PureComponent {
     render() {
         const {formatMessage} = this.context.intl;
         const {maxFileSize, token, url} = this.props;
-        const {error, hasPermission, files, totalSize} = this.state;
+        const {error, hasPermission, files, totalSize, loaded} = this.state;
+
+        if (!loaded) {
+            return (
+                <Loading/>
+            );
+        }
 
         if (error) {
             return this.renderErrorMessage(error);
@@ -503,7 +521,7 @@ export default class ExtensionPost extends PureComponent {
                 });
 
                 return this.renderErrorMessage(storage);
-            } else if (files.length > 5) {
+            } else if (files.length > MAX_FILE_COUNT) {
                 const fileCount = formatMessage({
                     id: 'mobile.extension.file_limit',
                     defaultMessage: 'Sharing is limited to a maximum of 5 files.',
@@ -638,7 +656,6 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
             width: 38,
         },
         video: {
-            backgroundColor: theme.centerChannelBg,
             alignItems: 'center',
             height: 48,
             justifyContent: 'center',
@@ -648,4 +665,4 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
     };
 });
 
-const styles = getStyleSheet(defalultTheme);
+const styles = getStyleSheet(defaultTheme);

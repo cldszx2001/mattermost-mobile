@@ -2,9 +2,7 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {configure, shallow} from 'enzyme';
-import Adapter from 'enzyme-adapter-react-16';
-configure({adapter: new Adapter()});
+import {shallow} from 'enzyme';
 
 import ForgotPassword from './forgot_password.js';
 
@@ -27,7 +25,7 @@ describe('ForgotPassword', () => {
             {context: {intl: {formatMessage}}},
         );
 
-        expect(wrapper).toMatchSnapshot();
+        expect(wrapper.getElement()).toMatchSnapshot();
     });
 
     test('snapshot for error on failure of email regex', () => {
@@ -39,7 +37,7 @@ describe('ForgotPassword', () => {
         wrapper.setState({email: 'bar'});
         wrapper.instance().submitResetPassword();
         wrapper.update();
-        expect(wrapper).toMatchSnapshot();
+        expect(wrapper.getElement()).toMatchSnapshot();
     });
 
     test('Should call sendPasswordResetEmail', () => {
@@ -73,6 +71,6 @@ describe('ForgotPassword', () => {
         wrapper.setState({email: 'test@test.com'});
         wrapper.instance().submitResetPassword();
         await sendPasswordResetEmail();
-        expect(wrapper).toMatchSnapshot();
+        expect(wrapper.getElement()).toMatchSnapshot();
     });
 });

@@ -1,5 +1,283 @@
 # Mattermost Mobile Apps Changelog
 
+## 1.18.1 Release
+- Release Date: April 18, 2019
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+ - iPhone 5s devices and later with iOS 11+ is required.
+ 
+### Bug Fixes
+ - Fixed a crash issue caused by a malformed post textbox localize string.
+ - Fixed an issue where iOS crashed when trying to log in using SSO and the SSO provider set a cookie without an expiration date.
+
+## 1.18.0 Release
+- Release Date: April 16, 2019
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+ - iPhone 5s devices and later with iOS 11+ is required.
+ - ``Bot`` tags were added for bot accounts feature in server v5.10 and mobile v1.18, meaning that mobile v1.17 and earlier don't support the tags.
+ 
+### Highlights
+ - Added support for Office365 single sign-on (SSO).
+ - Added support for Integrated Windows Authentication (IWA).
+
+### Improvements
+ - Added the ability for channel links to open inside the app.
+ - Added ability for emojis and hyperlinks to render in the message attachment title.
+ - Added Chinese support for words that trigger mentions.
+ - Added a setting to the system console to change the minimum length of hashtags.
+ - Added a reply option to long press context menu.
+
+### Bug Fixes
+ - Fixed an issue where blank spaces broke markdown tables.
+ - Fixed an issue where deactivated users appeared on "Add Members" modal but not on the search results.
+ - Fixed an issue on Android where extra text in the search box appeared after using the autocomplete drop-down.
+ - Fixed an issue with multiple text entries when typing with Shift+Letter on Android.
+ - Fixed an issue where push notifications badges did not always clear when read on another device.
+ - Fixed an issue where opening a single or group notification did not take the user into the channel where the notification came from.
+ - Fixed an issue where timezone did not automatically update on Android when travelling to another timezone.
+ - Fixed an issue where the user mention autocomplete drop-down was case sensitive.
+ - Fixed an issue where system admininistrators were able to see the full long press menu when long pressing a system message.
+ - Fixed an issue where users were not able to unflag posts from "Flagged Posts" when opened from a read-only channel.
+ - Fixed an issue where users were unable to create channel names of 2 byte characters.
+ 
+### Known Issues
+ - Content for ephemeral messages is not displayed on Mattermost Mobile Apps.
+
+## 1.17.0 Release
+- Release Date: March 20, 2019
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+ - If **DisableLegacyMfa** setting in ``config.json`` is set to ``true`` and [multi-factor authentication](https://docs.mattermost.com/deployment/auth.html) is enabled, ensure your users have upgraded to mobile app version 1.17 or later. See [Important Upgrade Notes](https://docs.mattermost.com/administration/important-upgrade-notes.html) for more details.
+ - If you are using an EMM provider via AppConfig, make sure to add two new settings, `useVPN` and `timeoutVPN`, to your AppConfig file. The settings were added for EMM connections using VPN on-demand - one to indicate if every request should wait for the VPN connection to be established, and another to set the timeout in seconds. See docs for more details on [setting AppConfig values](https://docs.mattermost.com/mobile/mobile-appconfig.html#mattermost-appconfig-values) for VPN support.
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+ - iPhone 5s devices and later with iOS 11+ is required.
+ 
+### Highlights
+ - iOS Share Extension now supports large file sizes and improved performance
+
+### Bug Fixes
+ - Fixed support for EMM connections using VPN on-demand. See docs for more details on [setting AppConfig values](https://docs.mattermost.com/mobile/mobile-appconfig.html#mattermost-appconfig-values) for VPN support.
+ - Fixed several Android app crash / fatal error issues.
+ - Fixed an issue on Android where the app crashed intermittently when selecting a link.
+ - Fixed an issue where email notifications setting was out of sync with the webapp until the setting was edited.
+ - Fixed an issue where notification badges were not cleared from other clients when clicking on a push notification after opening the mobile app.
+ - Fixed an issue where the app did not show local notification when session expired.
+ - Fixed an issue where the profile picture for webhooks was showing the hook owner picture.
+ - Fixed an issue where some emoji were not rendered as jumbo.
+ - Fixed an issue where jumbo emoji posted as a reply sometimes appeared with large space beneath.
+ - Fixed an issue where the "No Internet Connection" banner did not always display when internet connectivity was lost.
+ - Fixed an issue where the "No Internet Connection" banner did not always disappear when connection was re-estabilished.
+ - Fixed an issue where opening channels with unreads had loading indicator placed above unread messages line.
+
+## 1.16.1 Release
+- Release Date: February 21, 2019
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+
+### Bug Fixes
+ - Fixed an issue where link previews and reactions weren't displayed when post metadata was disabled.
+ - Fixed an issue on Android where the app crashed when sharing multiple files.
+ 
+## 1.16.0 Release
+- Release Date: February 16, 2019
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+
+### Improvements
+ - Added the ability to remove own profile picture.
+ - Changed "X" to "Cancel" on Edit Profile page.
+ - Added support for relative permalinks.
+
+### Bug Fixes
+ - Fixed an issue where the iOS app did not wait until the on-demand VPN connection was established. (EMM Providers)
+ - Fixed an issue with a white screen caused by missing Russian translations.
+ - Fixed an issue where the iOS badge notification did not always clear.
+ - Fixed an issue where the thread view displayed a new message indicator.
+ - Fixed an issue where quick multiple taps on the file icon opened multiple file previews.
+ - Fixed an issue where the settings page did not show an option to join other teams.
+ - Fixed an issue where image previews didn't work after using Delete File Cache.
+ - Fixed an issue on Android where the notification trigger word modal title was "Send email notifications" instead of "Keywords".
+ - Fixed an issue where the Webhook icon was misaligned and bottom edges were cut off.
+ - Fixed an issue on Android where the user was not asked to authenticate to the app first when trying to share a photo, resulting in a white "Share modal" screen with a never-ending loading indicator.
+ - Fixed an issue on iOS where push notifications were not preserved when opening the app via the Mattermost icon.
+
+## 1.15.2 Release
+- Release Date: January 16, 2019
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+
+### Bug Fixes
+
+ - Fixed an issue where the status changes for other users did not always stay current in the mobile app.
+ - Fixed an issue where a post did not fail properly when the user attempted to send the post while there was no network access.
+ - Fixed an issue where date separators did not update when changing timezones.
+ - Fixed an issue where the Favorites section did not clear from a users's channel drawer.
+ - Removed an extra divider below "Edit Channel" of Direct Message Channel Info.
+ - Fixed an issue where a user was not returned to previously viewed channel after viewing and then closing an archived channel.
+ - Fixed an issue where a quick double tap on switch of Channel Info created and extra on/off state.
+ - Fixed an issue where iOS long press menu didn't have rounded corners.
+
+## 1.15.1 Release
+- Release Date: December 28, 2018
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+ 
+### Bug Fixes
+ - Fixed an issue preventing some users from logging in using OKTA.
+
+## 1.15.0 Release
+- Release Date: December 16, 2018
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+### Combatibility
+
+ - Mobile App v1.13+ is required for Mattermost Server v5.4+.
+ - Android operating system 7+ [is required by Google](https://android-developers.googleblog.com/2017/12/improving-app-security-and-performance.html).
+
+### Highlights
+ - Added mention and reply mention highlighting.
+ - Added a sliding animation for the reaction list.
+ - Added support for pinned posts.
+ - Added support for jumbo emojis.
+ - Added support for interactive dialogs.
+ - Improved UI for the long press menu and emoji reaction viewer.
+
+### Improvements
+ - Added the ability to include custom headers with requests for custom builds.
+ - Push Notifications that are grouped by channels are cleared once the channel is read.
+- Improved auto-reconnect when unable to reach the server.
+ - Added support for changing the mobile client status to offline when the app loses connection.
+ - Added 'View Members' button to archived channels.
+ - Added support on iOS for keeping the postlist in place without scrolling when new content is available.
+
+### Bug Fixes
+ - Fixed an issue where clicking on a file did not show downloading progress.
+ - Fixed an issue on Android where on fresh install the share extension would not properly show available channels.
+ - Fixed an issue where recently archived channels remained in in: autocomplete when they had been archived.
+ - Fixed an issue where text should render when no actual custom emoji matched the named emoji pattern.
+ - Fixed an issue on iOS where text got cut-off after replying to a message.
+ - Fixed an issue where search modifier for channels was showing Direct Messages without usernames.
+ - Fixed an issue where "Close Channel" did not work properly when viewing two archived channels in a row.
+ - Fixed an issue with "Critical Error" screen when trying to upload certain file types from "+" to the left of message input box.
+
+## 1.14.0 Release
+- Release Date: November 16, 2018
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported unless the user installs the CA certificate on their device
+
+**Combatibility Note: Mobile App v1.13+ is required for Mattermost Server v5.4+**
+
+### Bug Fixes
+- Fixed an issue where the Android app did not allow establishing a network connection with any server that used a self-signed certificate that had the CA certificate user installed on the device.
+- Removed "Copy Post" option on long-press message menu for posts without text.
+- Fixed an issue where the "Search Results" header was not fully scrolled to top on search "from:username".
+- Fixed an issue where channel names truncated at fewer characters than necessary.
+- Fixed an issue where the same uploaded photo generated a different file size.
+- Fixed an issue where the "(you)" was not displayed to the right of a user's name in the channel drawer when a user opened a Direct Message channel with themself.
+- Fixed an issue where a dark theme set from webapp broke mobile display.
+- Fixed an issue where channel drawer transition sometimes lagged.
+- Fixed an issue where sending photos to Mattermost created large files.
+- Fixed an issue where the apps showed "Select a Team" screen when opened.
+- Fixed an issue where at-mention, emoji, and slash command autocompletes had a double top border.
+- Fixed an issue where the drawer was unable to close when showing the team list.
+- Fixed an issue where team sidebar showed + sign even without more teams to join.
+
+
+## 1.13.1 Release
+- Release Date: October 18, 2018
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported
+
+**Combatibility Note: Mobile App v1.13+ is required for Mattermost Server v5.4+**
+
+### Bug Fixes
+- Fixed an issue preventing some users from authenticating using OKTA
+
+## v1.13.0 Release
+- Release Date: October 16, 2018
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported
+
+**Combatibility Note: Mobile App v1.13+ is required for Mattermost Server v5.4+**
+
+### Highlights
+
+#### View Emoji Reactions
+- Hold down on any emoji reaction to see who reacted to the post.
+
+#### Hashtags
+- Added support for searching for hashtags in posts.
+
+#### Dropdown menus
+- Added support for dropdown menus in message attachments.
+
+### Improvements
+- Added support for iPhone XR, XS and XS Max.
+- Added support for nicknames on user profile.
+- On servers 5.4+, added support for searching in direct and group message channels using the "in:" modifier.
+- Channel autocomplete now gets closed if multiple tildes are typed.
+- Added a draft icon in sidebar and channel switcher for channels with unsent messages.
+- Users are now redirected to the archived channel view (rather than to Town Square) when a channel is archived.
+- When closing an archived channel, users are now returned to the previously viewed channel.
+
+### Bug Fixes
+- Refactored postlist to include Android Pie fixes and smoother scrolling.
+- Fixed an issue where deactivated users were not marked as such in "Jump To" search.
+- Fixed an issue where users got a permission error when trying to open a file from within the image preview screen.
+- Fixed an issue where session expiry notifications were not being sent on Android.
+- Fixed an issue where post attachments failed to upload.
+- Fixed an issue where the "DM More..." list cut off user info.
+- Fixed an issue where the user would briefly see a system message when loading a reply thread.
+- Fixed an issue where the error message was incorrectly formatted if the login method was set to email/password and the user tried to log in with SAML.
+- Fixed an issue on Android where the keyboard sometimes overlapped the bottom of the post textbox.
+- Fixed an issue where there was no option to take video via "+" > "Take Photo or Video" on iOS.
+
+## v1.12.0 Release
+- Release Date: September 16, 2018
+- Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported
+
+### Highlights
+
+#### Search Date Filters
+- Search for messages before, on, or after a specified date.
+
+### Improvements
+- Added notification support for Android O and P.
+
+### Bug Fixes
+- Fixed an issue where Okta was not able to login in some deployments.
+- Fixed an issue where messages in Direct Message channels did not show when clicking "Jump To".
+- Fixed an issue where `Show More` on a post with a message attachment displayed a blank where content should have been.
+- Prevent downloading of files when disallowed in the System Console.
+- Fixed an issue where users could not click on attachment filenames to open them.
+- Fixed an issue where email notification settings did not save from mobile.
+- Fixed an issue where the share extension allowed users to select and attempt to share content to channels that had been archived.
+- Fixed an issue where reacting to an existing emoji in an archived channel was allowed.
+- Fixed an issue where archived channels sometimes remained in the drawer.
+- Fixed an issue where deactivated users were not marked as such in Direct Message search.
+
+
 ## v1.11.0 Release
 - Release Date: August 16, 2018
 - Server Versions Supported: Server v4.10+ is required, Self-Signed SSL Certificates are not supported

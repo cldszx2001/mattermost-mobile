@@ -2,20 +2,20 @@
 // See LICENSE.txt for license information.
 
 import {fetchMyChannelsAndMembers} from 'mattermost-redux/actions/channels';
+import {getRedirectChannelNameForTeam, getChannelByName} from 'mattermost-redux/selectors/entities/channels';
 
+import {loadProfilesAndTeamMembersForDMSidebar} from 'app/actions/views/channel';
 import {ViewTypes} from 'app/constants';
-import {getDefaultChannelForTeam} from 'share_extension/android/selectors';
 
 export function getTeamChannels(teamId) {
     return async (dispatch, getState) => {
-        let defaultChannel = getDefaultChannelForTeam(getState(), teamId);
+        await dispatch(fetchMyChannelsAndMembers(teamId));
+        dispatch(loadProfilesAndTeamMembersForDMSidebar(teamId));
 
-        if (!defaultChannel) {
-            await fetchMyChannelsAndMembers(teamId)(dispatch, getState);
-            defaultChannel = getDefaultChannelForTeam(getState(), teamId);
-        }
+        const state = getState();
+        const redirectChannel = getChannelByName(state, getRedirectChannelNameForTeam(state, teamId));
 
-        return defaultChannel.id;
+        return redirectChannel.id;
     };
 }
 

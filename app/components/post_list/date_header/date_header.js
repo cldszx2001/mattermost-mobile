@@ -10,26 +10,30 @@ import {
 
 import FormattedDate from 'app/components/formatted_date';
 import {makeStyleSheetFromTheme} from 'app/utils/theme';
-import {DATE_LINE, DATE_LINE_SUFFIX} from 'app/selectors/post_list';
 
-// DateHeader accepts as a timestamp encoded as a string for rendering as part of a post list.
+// DateHeader accepts as a timestamp for rendering as part of a post list.
 export default class DateHeader extends PureComponent {
     static propTypes = {
-        dateLineString: PropTypes.string.isRequired,
+        date: PropTypes.number.isRequired,
         theme: PropTypes.object.isRequired,
+        timeZone: PropTypes.string,
         style: ViewPropTypes.style,
     };
 
     render() {
-        const {theme, dateLineString} = this.props;
+        const {theme, timeZone, date} = this.props;
         const style = getStyleSheet(theme);
-        const indexSuffix = dateLineString.indexOf(DATE_LINE_SUFFIX);
 
-        let date;
-        if (indexSuffix >= 0) {
-            date = new Date(parseInt(dateLineString.substring(DATE_LINE.length, indexSuffix), 10));
-        } else {
-            date = new Date(parseInt(dateLineString.substring(DATE_LINE.length), 10));
+        const dateFormatProps = {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            value: new Date(date),
+        };
+
+        if (timeZone) {
+            dateFormatProps.timeZone = timeZone;
         }
 
         return (
@@ -38,11 +42,7 @@ export default class DateHeader extends PureComponent {
                 <View style={style.dateContainer}>
                     <FormattedDate
                         style={style.date}
-                        value={date}
-                        weekday='short'
-                        day='2-digit'
-                        month='short'
-                        year='numeric'
+                        {...dateFormatProps}
                     />
                 </View>
                 <View style={style.line}/>

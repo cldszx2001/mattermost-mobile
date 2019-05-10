@@ -12,6 +12,7 @@ import {
     Keyboard,
     StyleSheet,
     Text,
+    TextInput,
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
@@ -20,14 +21,18 @@ import {KeyboardAwareScrollView} from 'react-native-keyboard-aware-scroll-view';
 
 import ErrorText from 'app/components/error_text';
 import FormattedText from 'app/components/formatted_text';
-import QuickTextInput from 'app/components/quick_text_input';
 import StatusBar from 'app/components/status_bar';
-import PushNotifications from 'app/push_notifications';
 import {GlobalStyles} from 'app/styles';
 import {preventDoubleTap} from 'app/utils/tap';
 import tracker from 'app/utils/time_tracker';
+import {t} from 'app/utils/i18n';
+import {setMfaPreflightDone, getMfaPreflightDone} from 'app/utils/security';
+
+import telemetry from 'app/telemetry';
 
 import {RequestStatus} from 'mattermost-redux/constants';
+
+const mfaExpectedErrors = ['mfa.validate_token.authenticate.app_error', 'ent.mfa.validate_token.authenticate.app_error'];
 
 export default class Login extends PureComponent {
     static propTypes = {
@@ -37,15 +42,13 @@ export default class Login extends PureComponent {
             handleLoginIdChanged: PropTypes.func.isRequired,
             handlePasswordChanged: PropTypes.func.isRequired,
             handleSuccessfulLogin: PropTypes.func.isRequired,
-            getSession: PropTypes.func.isRequired,
-            checkMfa: PropTypes.func.isRequired,
+            scheduleExpiredNotification: PropTypes.func.isRequired,
             login: PropTypes.func.isRequired,
         }).isRequired,
         config: PropTypes.object.isRequired,
         license: PropTypes.object.isRequired,
         loginId: PropTypes.string.isRequired,
         password: PropTypes.string.isRequired,
-        checkMfaRequest: PropTypes.object.isRequired,
         loginRequest: PropTypes.object.isRequired,
     };
 
@@ -61,13 +64,14 @@ export default class Login extends PureComponent {
         };
     }
 
-    componentWillMount() {
+    componentDidMount() {
         Dimensions.addEventListener('change', this.orientationDidChange);
+        setMfaPreflightDone(false);
     }
 
     componentWillReceiveProps(nextProps) {
         if (this.props.loginRequest.status === RequestStatus.STARTED && nextProps.loginRequest.status === RequestStatus.SUCCESS) {
-            this.props.actions.handleSuccessfulLogin().then(this.props.actions.getSession).then(this.goToChannel);
+            this.props.actions.handleSuccessfulLogin().then(this.goToChannel);
         } else if (this.props.loginRequest.status !== nextProps.loginRequest.status && nextProps.loginRequest.status !== RequestStatus.STARTED) {
             this.setState({isLoading: false});
         }
@@ -77,23 +81,13 @@ export default class Login extends PureComponent {
         Dimensions.removeEventListener('change', this.orientationDidChange);
     }
 
-    goToChannel = (expiresAt) => {
-        const {intl} = this.context;
+    goToChannel = () => {
+        telemetry.remove(['start:overall']);
+
         const {navigator} = this.props;
         tracker.initialLoad = Date.now();
 
-        if (expiresAt) {
-            PushNotifications.localNotificationSchedule({
-                date: new Date(expiresAt),
-                message: intl.formatMessage({
-                    id: 'mobile.session_expired',
-                    defaultMessage: 'Session Expired: Please log in to continue receiving notifications.',
-                }),
-                userInfo: {
-                    localNotification: true,
-                },
-            });
-        }
+        this.scheduleSessionExpiredNotification();
 
         navigator.resetTo({
             screen: 'Channel',
@@ -142,6 +136,14 @@ export default class Login extends PureComponent {
         Keyboard.dismiss();
         InteractionManager.runAfterInteractions(async () => {
             if (!this.props.loginId) {
+                t('login.noEmail');
+                t('login.noEmailLdapUsername');
+                t('login.noEmailUsername');
+                t('login.noEmailUsernameLdapUsername');
+                t('login.noLdapUsername');
+                t('login.noUsername');
+                t('login.noUsernameLdapUsername');
+
                 // it's slightly weird to be constructing the message ID, but it's a bit nicer than triply nested if statements
                 let msgId = 'login.no';
                 if (this.props.config.EnableSignInWithEmail === 'true') {
@@ -178,7 +180,7 @@ export default class Login extends PureComponent {
                     isLoading: false,
                     error: {
                         intl: {
-                            id: 'login.noPassword',
+                            id: t('login.noPassword'),
                             defaultMessage: 'Please enter your password',
                         },
                     },
@@ -186,23 +188,27 @@ export default class Login extends PureComponent {
                 return;
             }
 
-            if (this.props.config.EnableMultifactorAuthentication === 'true') {
-                const result = await this.props.actions.checkMfa(this.props.loginId);
-                if (result.data) {
-                    this.goToMfa();
-                } else {
-                    this.signIn();
-                }
-            } else {
-                this.signIn();
-            }
+            this.signIn();
         });
     });
+
+    scheduleSessionExpiredNotification = () => {
+        const {intl} = this.context;
+        const {actions} = this.props;
+
+        actions.scheduleExpiredNotification(intl);
+    };
 
     signIn = () => {
         const {actions, loginId, loginRequest, password} = this.props;
         if (loginRequest.status !== RequestStatus.STARTED) {
-            actions.login(loginId.toLowerCase(), password);
+            actions.login(loginId.toLowerCase(), password).then(this.checkLoginResponse);
+        }
+    };
+
+    checkLoginResponse = (data) => {
+        if (mfaExpectedErrors.includes(data?.error?.server_error_id)) { // eslint-disable-line camelcase
+            this.goToMfa();
         }
     };
 
@@ -242,7 +248,6 @@ export default class Login extends PureComponent {
     getLoginErrorMessage = () => {
         return (
             this.getServerErrorForLogin() ||
-            this.props.checkMfaRequest.error ||
             this.state.error
         );
     };
@@ -256,13 +261,16 @@ export default class Login extends PureComponent {
         if (!errorId) {
             return error.message;
         }
+        if (mfaExpectedErrors.includes(errorId) && !getMfaPreflightDone()) {
+            return null;
+        }
         if (
             errorId === 'store.sql_user.get_for_login.app_error' ||
             errorId === 'ent.ldap.do_login.user_not_registered.app_error'
         ) {
             return {
                 intl: {
-                    id: 'login.userNotFound',
+                    id: t('login.userNotFound'),
                     defaultMessage: "We couldn't find an account matching your login credentials.",
                 },
             };
@@ -272,7 +280,7 @@ export default class Login extends PureComponent {
         ) {
             return {
                 intl: {
-                    id: 'login.invalidPassword',
+                    id: t('login.invalidPassword'),
                     defaultMessage: 'Your password is incorrect.',
                 },
             };
@@ -381,7 +389,7 @@ export default class Login extends PureComponent {
                             />
                         </View>
                         <ErrorText error={this.getLoginErrorMessage()}/>
-                        <QuickTextInput
+                        <TextInput
                             ref={this.loginRef}
                             value={this.props.loginId}
                             onChangeText={this.props.actions.handleLoginIdChanged}
@@ -396,7 +404,7 @@ export default class Login extends PureComponent {
                             blurOnSubmit={false}
                             disableFullscreenUI={true}
                         />
-                        <QuickTextInput
+                        <TextInput
                             ref={this.passwordRef}
                             value={this.props.password}
                             onChangeText={this.props.actions.handlePasswordChanged}

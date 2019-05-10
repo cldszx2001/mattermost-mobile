@@ -4,7 +4,7 @@
 import React, {PureComponent} from 'react';
 import PropTypes from 'prop-types';
 import {Platform, StyleSheet, Text, View} from 'react-native';
-import RNFetchBlob from 'react-native-fetch-blob';
+import RNFetchBlob from 'rn-fetch-blob';
 import {AnimatedCircularProgress} from 'react-native-circular-progress';
 
 import {Client4} from 'mattermost-redux/client';
@@ -13,6 +13,7 @@ import FileAttachmentImage from 'app/components/file_attachment_list/file_attach
 import FileAttachmentIcon from 'app/components/file_attachment_list/file_attachment_icon';
 import FileUploadRetry from 'app/components/file_upload_preview/file_upload_retry';
 import FileUploadRemove from 'app/components/file_upload_preview/file_upload_remove';
+import mattermostBucket from 'app/mattermost_bucket';
 import {buildFileUploadData, encodeHeaderURIStringToUTF8} from 'app/utils/file';
 
 export default class FileUploadItem extends PureComponent {
@@ -110,13 +111,15 @@ export default class FileUploadItem extends PureComponent {
         return false;
     };
 
-    uploadFile = () => {
+    uploadFile = async () => {
         const {channelId, file} = this.props;
         const fileData = buildFileUploadData(file);
 
         const headers = {
             Authorization: `Bearer ${Client4.getToken()}`,
+            'X-Requested-With': 'XMLHttpRequest',
             'Content-Type': 'multipart/form-data',
+            'X-CSRF-Token': Client4.csrf,
         };
 
         const fileInfo = {
@@ -134,7 +137,12 @@ export default class FileUploadItem extends PureComponent {
 
         Client4.trackEvent('api', 'api_files_upload');
 
-        this.uploadPromise = RNFetchBlob.fetch('POST', Client4.getFilesRoute(), headers, data);
+        const certificate = await mattermostBucket.getPreference('cert');
+        const options = {
+            timeout: 10000,
+            certificate,
+        };
+        this.uploadPromise = RNFetchBlob.config(options).fetch('POST', Client4.getFilesRoute(), headers, data);
         this.uploadPromise.uploadProgress(this.handleUploadProgress);
         this.uploadPromise.then(this.handleUploadCompleted).catch(this.handleUploadError);
     };
@@ -167,6 +175,7 @@ export default class FileUploadItem extends PureComponent {
             filePreviewComponent = (
                 <FileAttachmentImage
                     file={file}
+                    imageSize='fullsize'
                     imageHeight={100}
                     imageWidth={100}
                     wrapperHeight={100}
@@ -266,6 +275,7 @@ const styles = StyleSheet.create({
     progressCirclePercentage: {
         alignItems: 'center',
         flex: 1,
+        justifyContent: 'center',
     },
     progressContent: {
         alignItems: 'center',
@@ -273,7 +283,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         left: 0,
         position: 'absolute',
-        top: 40,
         width: '100%',
     },
     progressText: {

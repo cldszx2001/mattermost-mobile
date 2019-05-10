@@ -2,9 +2,9 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {configure, shallow} from 'enzyme';
-import Adapter from 'enzyme-adapter-react-16';
-configure({adapter: new Adapter()});
+import {shallow} from 'enzyme';
+
+import Preferences from 'mattermost-redux/constants/preferences';
 
 import AnnouncementBanner from './announcement_banner.js';
 
@@ -18,7 +18,7 @@ describe('AnnouncementBanner', () => {
         bannerText: 'Banner Text',
         bannerTextColor: '#fff',
         navigator: {},
-        theme: {},
+        theme: Preferences.THEMES.default,
     };
 
     test('should match snapshot', () => {
@@ -26,9 +26,9 @@ describe('AnnouncementBanner', () => {
             <AnnouncementBanner {...baseProps}/>
         );
 
-        expect(wrapper).toMatchSnapshot();
+        expect(wrapper.getElement()).toMatchSnapshot();
 
         wrapper.setProps({bannerEnabled: false});
-        expect(wrapper).toMatchSnapshot();
+        expect(wrapper.getElement()).toMatchSnapshot();
     });
 });

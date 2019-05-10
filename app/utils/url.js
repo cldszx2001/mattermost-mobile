@@ -6,6 +6,8 @@ import {escapeRegex} from './markdown';
 
 import {Files} from 'mattermost-redux/constants';
 
+import {DeepLinkTypes} from 'app/constants';
+
 const ytRegex = /(?:http|https):\/\/(?:www\.|m\.)?(?:(?:youtube\.com\/(?:(?:v\/)|(?:(?:watch|embed\/watch)(?:\/|.*v=))|(?:embed\/)|(?:user\/[^/]+\/u\/[0-9]\/)))|(?:youtu\.be\/))([^#&?]*)/;
 
 export function isValidUrl(url = '') {
@@ -14,7 +16,7 @@ export function isValidUrl(url = '') {
 }
 
 export function stripTrailingSlashes(url = '') {
-    return url.trim().replace(/\/+$/, '');
+    return url.replace(/ /g, '').replace(/^\/+/, '').replace(/\/+$/, '');
 }
 
 export function removeProtocol(url = '') {
@@ -41,26 +43,6 @@ export function extractFirstLink(text) {
 
 export function isYoutubeLink(link) {
     return link.trim().match(ytRegex);
-}
-
-export async function getShortenedLink(link) {
-    return new Promise(((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-
-        xhr.onreadystatechange = () => {
-            if (xhr.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-            resolve(xhr.responseURL);
-        };
-
-        xhr.onerror = () => {
-            reject('');
-        };
-
-        xhr.open('HEAD', link);
-        xhr.send();
-    }));
 }
 
 export function isImageLink(link) {
@@ -116,12 +98,24 @@ export function getScheme(url) {
     return match && match[1];
 }
 
-export function matchPermalink(link, rootURL) {
-    if (!rootURL) {
+export function matchDeepLink(url, serverURL, siteURL) {
+    if (!url || !serverURL || !siteURL) {
         return null;
     }
 
-    return new RegExp('^' + escapeRegex(rootURL) + '\\/([^\\/]+)\\/pl\\/(\\w+)').exec(link);
+    const linkRoot = `(?:${escapeRegex(serverURL)}|${escapeRegex(siteURL)})?`;
+
+    let match = new RegExp('^' + linkRoot + '\\/([^\\/]+)\\/channels\\/(\\S+)').exec(url);
+    if (match) {
+        return {type: DeepLinkTypes.CHANNEL, teamName: match[1], channelName: match[2]};
+    }
+
+    match = new RegExp('^' + linkRoot + '\\/([^\\/]+)\\/pl\\/(\\w+)').exec(url);
+    if (match) {
+        return {type: DeepLinkTypes.PERMALINK, teamName: match[1], postId: match[2]};
+    }
+
+    return null;
 }
 
 export function getYouTubeVideoId(link) {

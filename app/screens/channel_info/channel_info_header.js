@@ -6,9 +6,10 @@ import PropTypes from 'prop-types';
 import {
     Text,
     View,
+    Platform,
 } from 'react-native';
 
-import ChanneIcon from 'app/components/channel_icon';
+import ChannelIcon from 'app/components/channel_icon';
 import FormattedDate from 'app/components/formatted_date';
 import FormattedText from 'app/components/formatted_text';
 import Markdown from 'app/components/markdown';
@@ -28,6 +29,8 @@ export default class ChannelInfoHeader extends React.PureComponent {
         status: PropTypes.string,
         theme: PropTypes.object.isRequired,
         type: PropTypes.string.isRequired,
+        isArchived: PropTypes.bool.isRequired,
+        isBot: PropTypes.bool.isRequired,
     };
 
     render() {
@@ -43,22 +46,29 @@ export default class ChannelInfoHeader extends React.PureComponent {
             status,
             theme,
             type,
+            isArchived,
+            isBot,
         } = this.props;
 
         const style = getStyleSheet(theme);
         const textStyles = getMarkdownTextStyles(theme);
         const blockStyles = getMarkdownBlockStyles(theme);
+        const baseTextStyle = Platform.OS === 'ios' ?
+            {...style.detail, lineHeight: 20} :
+            style.detail;
 
         return (
             <View style={style.container}>
                 <View style={style.channelNameContainer}>
-                    <ChanneIcon
+                    <ChannelIcon
                         isInfo={true}
                         membersCount={memberCount - 1}
                         size={16}
                         status={status}
                         theme={theme}
                         type={type}
+                        isArchived={isArchived}
+                        isBot={isBot}
                     />
                     <Text
                         ellipsizeMode='tail'
@@ -78,7 +88,7 @@ export default class ChannelInfoHeader extends React.PureComponent {
                         <Markdown
                             navigator={navigator}
                             onPermalinkPress={onPermalinkPress}
-                            baseTextStyle={style.detail}
+                            baseTextStyle={baseTextStyle}
                             textStyles={textStyles}
                             blockStyles={blockStyles}
                             value={purpose}
@@ -95,7 +105,7 @@ export default class ChannelInfoHeader extends React.PureComponent {
                         <Markdown
                             navigator={navigator}
                             onPermalinkPress={onPermalinkPress}
-                            baseTextStyle={style.detail}
+                            baseTextStyle={baseTextStyle}
                             textStyles={textStyles}
                             blockStyles={blockStyles}
                             value={header}

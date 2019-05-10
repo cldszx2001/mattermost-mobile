@@ -2,7 +2,9 @@
 // See LICENSE.txt for license information.
 
 import {connect} from 'react-redux';
+import {bindActionCreators} from 'redux';
 
+import {getRedirectLocation} from 'mattermost-redux/actions/general';
 import {Preferences} from 'mattermost-redux/constants';
 import {getConfig} from 'mattermost-redux/selectors/entities/general';
 import {getOpenGraphMetadataForUrl} from 'mattermost-redux/selectors/entities/posts';
@@ -28,6 +30,16 @@ function makeGetFirstLink() {
     };
 }
 
+function getOpenGraphData(metadata, url) {
+    if (!metadata || !metadata.embeds) {
+        return null;
+    }
+
+    return metadata.embeds.find((embed) => {
+        return embed.type === 'opengraph' && embed.url === url ? embed.data : null;
+    });
+}
+
 function makeMapStateToProps() {
     const getFirstLink = makeGetFirstLink();
 
@@ -40,15 +52,29 @@ function makeMapStateToProps() {
         const previewsEnabled = getBool(state, Preferences.CATEGORY_ADVANCED_SETTINGS, `${ViewTypes.FEATURE_TOGGLE_PREFIX}${ViewTypes.EMBED_PREVIEW}`) ||
             getBool(state, Preferences.CATEGORY_DISPLAY_SETTINGS, Preferences.LINK_PREVIEW_DISPLAY, true);
 
+        let openGraphData = getOpenGraphMetadataForUrl(state, link);
+        if (!openGraphData) {
+            const data = getOpenGraphData(ownProps.metadata, link);
+            openGraphData = data?.data;
+        }
+
         return {
             ...getDimensions(state),
-            config,
+            googleDeveloperKey: config.GoogleDeveloperKey,
             link,
-            openGraphData: getOpenGraphMetadataForUrl(state, link),
+            openGraphData,
             showLinkPreviews: previewsEnabled && config.EnableLinkPreviews === 'true',
             theme: getTheme(state),
         };
     };
 }
 
-export default connect(makeMapStateToProps)(PostBodyAdditionalContent);
+function mapDispatchToProps(dispatch) {
+    return {
+        actions: bindActionCreators({
+            getRedirectLocation,
+        }, dispatch),
+    };
+}
+
+export default connect(makeMapStateToProps, mapDispatchToProps)(PostBodyAdditionalContent);

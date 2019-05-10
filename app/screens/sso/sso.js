@@ -8,16 +8,17 @@ import {
     InteractionManager,
     Text,
     View,
-    WebView,
+    Platform,
 } from 'react-native';
+import {WebView} from 'react-native-webview';
 import CookieManager from 'react-native-cookies';
+import urlParse from 'url-parse';
 
 import {Client4} from 'mattermost-redux/client';
 
 import {ViewTypes} from 'app/constants';
 import Loading from 'app/components/loading';
 import StatusBar from 'app/components/status_bar';
-import PushNotifications from 'app/push_notifications';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
 import tracker from 'app/utils/time_tracker';
 
@@ -25,7 +26,7 @@ const HEADERS = {
     'X-Mobile-App': 'mattermost',
 };
 
-const postMessageJS = "setTimeout(function() { postMessage(document.body.innerText, '*')}, 0);";
+const postMessageJS = "window.postMessage(document.body.innerText, '*');";
 
 // Used to make sure that OneLogin forms scale appropriately on both platforms.
 const oneLoginFormScalingJS = `
@@ -65,11 +66,13 @@ class SSO extends PureComponent {
         serverUrl: PropTypes.string.isRequired,
         ssoType: PropTypes.string.isRequired,
         actions: PropTypes.shape({
-            getSession: PropTypes.func.isRequired,
+            scheduleExpiredNotification: PropTypes.func.isRequired,
             handleSuccessfulLogin: PropTypes.func.isRequired,
             setStoreFromLocalData: PropTypes.func.isRequired,
         }).isRequired,
     };
+
+    useWebkit = true;
 
     constructor(props) {
         super(props);
@@ -78,18 +81,26 @@ class SSO extends PureComponent {
             error: null,
             renderWebView: false,
             jsCode: '',
-            scalePagesToFit: false,
+            messagingEnabled: false,
         };
 
         switch (props.ssoType) {
         case ViewTypes.GITLAB:
             this.loginUrl = `${props.serverUrl}/oauth/gitlab/mobile_login`;
-            this.completedUrl = `${props.serverUrl}/signup/gitlab/complete`;
+            this.completedUrl = '/signup/gitlab/complete';
             break;
         case ViewTypes.SAML:
             this.loginUrl = `${props.serverUrl}/login/sso/saml?action=mobile`;
             this.completedUrl = '/login/sso/saml';
             break;
+        case ViewTypes.OFFICE365:
+            this.loginUrl = `${props.serverUrl}/oauth/office365/mobile_login`;
+            this.completedUrl = '/signup/office365/complete';
+            break;
+        }
+
+        if (Platform.OS === 'ios') {
+            this.useWebkit = parseInt(Platform.Version, 10) >= 11;
         }
     }
 
@@ -98,27 +109,16 @@ class SSO extends PureComponent {
     }
 
     clearPreviousCookies = () => {
-        CookieManager.clearAll().then(() => {
+        CookieManager.clearAll(this.useWebkit).then(() => {
             this.setState({renderWebView: true});
         });
     };
 
-    goToLoadTeam = (expiresAt) => {
-        const {intl, navigator} = this.props;
+    goToChannel = () => {
+        const {navigator} = this.props;
         tracker.initialLoad = Date.now();
 
-        if (expiresAt) {
-            PushNotifications.localNotificationSchedule({
-                date: new Date(expiresAt),
-                message: intl.formatMessage({
-                    id: 'mobile.session_expired',
-                    defaultMessage: 'Session Expired: Please log in to continue receiving notifications.',
-                }),
-                userInfo: {
-                    localNotification: true,
-                },
-            });
-        }
+        this.scheduleSessionExpiredNotification();
 
         navigator.resetTo({
             screen: 'Channel',
@@ -156,43 +156,42 @@ class SSO extends PureComponent {
 
     onNavigationStateChange = (navState) => {
         const {url} = navState;
-        const nextState = {};
+        const nextState = {
+            messagingEnabled: false,
+        };
+        const parsed = urlParse(url);
 
-        if (url.includes('.onelogin.com')) {
+        if (parsed.host.includes('.onelogin.com')) {
             nextState.jsCode = oneLoginFormScalingJS;
-            nextState.scalePagesToFit = true;
-        } else if (url.includes(this.props.serverUrl)) {
-            nextState.jsCode = postMessageJS;
-        } else {
-            nextState.jsCode = '';
+        } else if (parsed.pathname === this.completedUrl) {
+            // To avoid `window.postMessage` conflicts in any of the SSO flows
+            // we enable the onMessage handler only When the webView navigates to the final SSO URL.
+            nextState.messagingEnabled = true;
         }
 
-        if (Object.keys(nextState).length) {
-            this.setState(nextState);
-        }
+        this.setState(nextState);
     };
 
     onLoadEnd = (event) => {
         const url = event.nativeEvent.url;
-
         if (url.includes(this.completedUrl)) {
-            CookieManager.get(this.props.serverUrl).then((res) => {
+            CookieManager.get(urlParse(url).origin, this.useWebkit).then((res) => {
                 const token = res.MMAUTHTOKEN;
 
                 if (token) {
                     this.setState({renderWebView: false});
                     const {
-                        getSession,
                         handleSuccessfulLogin,
                         setStoreFromLocalData,
                     } = this.props.actions;
 
                     Client4.setToken(token);
-                    setStoreFromLocalData({url: this.props.serverUrl, token}).
+                    setStoreFromLocalData({url: Client4.getUrl(), token}).
                         then(handleSuccessfulLogin).
-                        then(getSession).
-                        then(this.goToLoadTeam).
+                        then(this.goToChannel).
                         catch(this.onLoadEndError);
+                } else if (this.webView && !this.state.error) {
+                    this.webView.injectJavaScript(postMessageJS);
                 }
             });
         }
@@ -203,13 +202,23 @@ class SSO extends PureComponent {
         this.setState({error: e.message});
     };
 
+    scheduleSessionExpiredNotification = () => {
+        const {actions, intl} = this.props;
+
+        actions.scheduleExpiredNotification(intl);
+    };
+
     renderLoading = () => {
         return <Loading/>;
     };
 
+    webViewRef = (ref) => {
+        this.webView = ref;
+    };
+
     render() {
         const {theme} = this.props;
-        const {error, renderWebView, jsCode, scalePagesToFit} = this.state;
+        const {error, messagingEnabled, renderWebView, jsCode} = this.state;
         const style = getStyleSheet(theme);
 
         let content;
@@ -224,23 +233,26 @@ class SSO extends PureComponent {
         } else {
             content = (
                 <WebView
+                    ref={this.webViewRef}
                     source={{uri: this.loginUrl, headers: HEADERS}}
                     javaScriptEnabledAndroid={true}
                     automaticallyAdjustContentInsets={false}
-                    scalesPageToFit={scalePagesToFit}
                     startInLoadingState={true}
                     onNavigationStateChange={this.onNavigationStateChange}
                     onShouldStartLoadWithRequest={() => true}
                     renderLoading={this.renderLoading}
-                    onMessage={this.onMessage}
                     injectedJavaScript={jsCode}
                     onLoadEnd={this.onLoadEnd}
+                    onMessage={messagingEnabled ? this.onMessage : null}
+                    useWebKit={this.useWebkit}
+                    useSharedProcessPool={true}
+                    cacheEnabled={true}
                 />
             );
         }
 
         return (
-            <View style={{flex: 1}}>
+            <View style={style.container}>
                 <StatusBar/>
                 {content}
             </View>
@@ -250,6 +262,9 @@ class SSO extends PureComponent {
 
 const getStyleSheet = makeStyleSheetFromTheme((theme) => {
     return {
+        container: {
+            flex: 1,
+        },
         errorContainer: {
             alignItems: 'center',
             flex: 1,

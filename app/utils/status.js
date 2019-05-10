@@ -5,9 +5,15 @@ import {
     Alert,
 } from 'react-native';
 import {toTitleCase} from 'app/utils/general';
+import {t} from 'app/utils/i18n';
 
 export function confirmOutOfOfficeDisabled(intl, status, updateStatus) {
     const userStatusId = 'modal.manual_status.auto_responder.message_' + status;
+    t('modal.manual_status.auto_responder.message_');
+    t('modal.manual_status.auto_responder.message_away');
+    t('modal.manual_status.auto_responder.message_dnd');
+    t('modal.manual_status.auto_responder.message_offline');
+    t('modal.manual_status.auto_responder.message_online');
 
     let translatedStatus;
     if (status === 'dnd') {
@@ -33,6 +39,7 @@ export function confirmOutOfOfficeDisabled(intl, status, updateStatus) {
         }, {status: translatedStatus}),
         [{
             text: intl.formatMessage({id: 'mobile.reset_status.alert_cancel', defaultMessage: 'Cancel'}),
+            style: 'cancel',
         }, {
             text: intl.formatMessage({id: 'mobile.reset_status.alert_ok', defaultMessage: 'OK'}),
             onPress: () => updateStatus(status),

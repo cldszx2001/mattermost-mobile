@@ -6,7 +6,6 @@ import PropTypes from 'prop-types';
 import {connect} from 'react-redux';
 import {
     PanResponder,
-    Platform,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -14,10 +13,11 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import Badge from 'app/components/badge';
-import PushNotifications from 'app/push_notifications';
 import {getTheme} from 'mattermost-redux/selectors/entities/preferences';
 import {preventDoubleTap} from 'app/utils/tap';
 import {makeStyleSheetFromTheme} from 'app/utils/theme';
+
+import telemetry from 'app/telemetry';
 
 import {getUnreadsInCurrentTeam} from 'mattermost-redux/selectors/entities/channels';
 import {getCurrentTeamId, getTeamMemberships} from 'mattermost-redux/selectors/entities/teams';
@@ -60,11 +60,6 @@ class ChannelDrawerButton extends PureComponent {
 
     componentDidMount() {
         EventEmitter.on('drawer_opacity', this.setOpacity);
-        PushNotifications.setApplicationIconBadgeNumber(this.props.mentionCount);
-    }
-
-    componentWillReceiveProps(nextProps) {
-        PushNotifications.setApplicationIconBadgeNumber(nextProps.mentionCount);
     }
 
     componentWillUnmount() {
@@ -76,6 +71,7 @@ class ChannelDrawerButton extends PureComponent {
     };
 
     handlePress = preventDoubleTap(() => {
+        telemetry.start(['channel:open_drawer']);
         this.props.openDrawer();
     });
 
@@ -94,8 +90,8 @@ class ChannelDrawerButton extends PureComponent {
 
         const members = Object.values(myTeamMembers).filter((m) => m.team_id !== currentTeamId);
         members.forEach((m) => {
-            mentions = mentions + (m.mention_count || 0);
-            messages = messages + (m.msg_count || 0);
+            mentions += (m.mention_count || 0);
+            messages += (m.msg_count || 0);
         });
 
         let badgeCount = 0;
@@ -112,8 +108,6 @@ class ChannelDrawerButton extends PureComponent {
                     style={style.badge}
                     countStyle={style.mention}
                     count={badgeCount}
-                    minHeight={20}
-                    minWidth={20}
                     onPress={this.handlePress}
                 />
             );
@@ -134,8 +128,10 @@ class ChannelDrawerButton extends PureComponent {
                 style={style.container}
             >
                 <View style={[style.wrapper, {opacity: this.state.opacity}]}>
-                    {icon}
-                    {badge}
+                    <View>
+                        {icon}
+                        {badge}
+                    </View>
                 </View>
             </TouchableOpacity>
         );
@@ -159,19 +155,11 @@ const getStyleFromTheme = makeStyleSheetFromTheme((theme) => {
             borderColor: theme.sidebarHeaderBg,
             borderRadius: 10,
             borderWidth: 1,
-            flexDirection: 'row',
-            left: 3,
+            left: -13,
             padding: 3,
             position: 'absolute',
             right: 0,
-            ...Platform.select({
-                android: {
-                    top: 10,
-                },
-                ios: {
-                    top: 5,
-                },
-            }),
+            top: -4,
         },
         mention: {
             color: theme.mentionColor,

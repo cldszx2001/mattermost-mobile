@@ -9,6 +9,7 @@ import {
     Keyboard,
     KeyboardAvoidingView,
     Platform,
+    StyleSheet,
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
@@ -22,6 +23,8 @@ import StatusBar from 'app/components/status_bar';
 import TextInputWithLocalizedPlaceholder from 'app/components/text_input_with_localized_placeholder';
 import {GlobalStyles} from 'app/styles';
 import {preventDoubleTap} from 'app/utils/tap';
+import {t} from 'app/utils/i18n';
+import {setMfaPreflightDone} from 'app/utils/security';
 
 export default class Mfa extends PureComponent {
     static propTypes = {
@@ -79,7 +82,7 @@ export default class Mfa extends PureComponent {
     };
 
     blur = () => {
-        this.textInput.refs.wrappedInstance.blur();
+        this.textInput.blur();
     };
 
     submit = preventDoubleTap(() => {
@@ -88,14 +91,14 @@ export default class Mfa extends PureComponent {
             this.setState({
                 error: {
                     intl: {
-                        id: 'login_mfa.tokenReq',
+                        id: t('login_mfa.tokenReq'),
                         defaultMessage: 'Please enter an MFA token',
                     },
                 },
             });
             return;
         }
-
+        setMfaPreflightDone(true);
         this.props.actions.login(this.props.loginId, this.props.password, this.state.token);
     });
 
@@ -129,8 +132,9 @@ export default class Mfa extends PureComponent {
         return (
             <KeyboardAvoidingView
                 behavior='padding'
-                style={{flex: 1}}
+                style={style.flex}
                 keyboardVerticalOffset={5}
+                enabled={Platform.OS === 'ios'}
             >
                 <StatusBar/>
                 <TouchableWithoutFeedback onPress={this.blur}>
@@ -155,7 +159,7 @@ export default class Mfa extends PureComponent {
                             autoCapitalize='none'
                             autoCorrect={false}
                             keyboardType='numeric'
-                            placeholder={{id: 'login_mfa.token', defaultMessage: 'MFA Token'}}
+                            placeholder={{id: t('login_mfa.token'), defaultMessage: 'MFA Token'}}
                             returnKeyType='go'
                             underlineColorAndroid='transparent'
                             disableFullscreenUI={true}
@@ -167,3 +171,9 @@ export default class Mfa extends PureComponent {
         );
     }
 }
+
+const style = StyleSheet.create({
+    flex: {
+        flex: 1,
+    },
+});

@@ -11,17 +11,25 @@ import {
     handlePasswordChanged,
 } from 'app/actions/views/login';
 
-jest.mock('react-native-fetch-blob/fs', () => ({
-    dirs: {
-        DocumentDir: () => jest.fn(),
-        CacheDir: () => jest.fn(),
-    },
-}));
-
 jest.mock('app/mattermost', () => ({
     app: {
         setAppCredentials: () => jest.fn(),
     },
+}));
+
+jest.mock('react-native-cookies', () => ({
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    openURL: jest.fn(),
+    canOpenURL: jest.fn(),
+    getInitialURL: jest.fn(),
+    get: () => Promise.resolve(({
+        res: {
+            MMCSRF: {
+                value: 'the cookie',
+            },
+        },
+    })),
 }));
 
 const mockStore = configureStore([thunk]);

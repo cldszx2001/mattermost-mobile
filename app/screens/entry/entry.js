@@ -11,6 +11,7 @@ import {
 
 import DeviceInfo from 'react-native-device-info';
 
+import {setSystemEmojis} from 'mattermost-redux/actions/emojis';
 import {Client4} from 'mattermost-redux/client';
 import EventEmitter from 'mattermost-redux/utils/event_emitter';
 
@@ -18,7 +19,6 @@ import {
     app,
     store,
 } from 'app/mattermost';
-import {loadFromPushNotification} from 'app/actions/views/root';
 import {ViewTypes} from 'app/constants';
 import PushNotifications from 'app/push_notifications';
 import {stripTrailingSlashes} from 'app/utils/url';
@@ -56,15 +56,14 @@ const lazyLoadReplyPushNotifications = () => {
  */
 export default class Entry extends PureComponent {
     static propTypes = {
-        config: PropTypes.object,
         theme: PropTypes.object,
         navigator: PropTypes.object,
         isLandscape: PropTypes.bool,
-        hydrationComplete: PropTypes.bool,
         enableTimezone: PropTypes.bool,
         deviceTimezone: PropTypes.string,
-        initializeModules: PropTypes.func.isRequired,
+        initializeModules: PropTypes.func,
         actions: PropTypes.shape({
+            autoUpdateTimezone: PropTypes.func.isRequired,
             setDeviceToken: PropTypes.func.isRequired,
         }).isRequired,
     };
@@ -132,6 +131,7 @@ export default class Entry extends PureComponent {
             this.setAppCredentials();
             this.setStartupThemes();
             this.handleNotification();
+            this.loadSystemEmojis();
 
             if (Platform.OS === 'android') {
                 this.launchForAndroid();
@@ -201,11 +201,8 @@ export default class Entry extends PureComponent {
             const {data, text, badge, completed} = notificationData;
 
             // if the notification has a completed property it means that we are replying to a notification
-            // and in case it doesn't it means we just opened the notification
             if (completed) {
                 onPushNotificationReply(data, text, badge, completed);
-            } else {
-                await store.dispatch(loadFromPushNotification(notification));
             }
             PushNotifications.resetNotification();
         }
@@ -224,6 +221,11 @@ export default class Entry extends PureComponent {
         } else {
             app.launchApp();
         }
+    };
+
+    loadSystemEmojis = () => {
+        const EmojiIndicesByAlias = require('app/utils/emojis').EmojiIndicesByAlias;
+        setSystemEmojis(EmojiIndicesByAlias);
     };
 
     renderLogin = () => {

@@ -2,7 +2,7 @@
 // See LICENSE.txt for license information.
 
 import {Platform} from 'react-native';
-import RNFetchBlob from 'react-native-fetch-blob';
+import RNFetchBlob from 'rn-fetch-blob';
 import mimeDB from 'mime-db';
 
 import {lookupMimeType} from 'mattermost-redux/utils/file_utils';
@@ -10,6 +10,7 @@ import {lookupMimeType} from 'mattermost-redux/utils/file_utils';
 import {DeviceTypes} from 'app/constants/';
 
 const EXTRACT_TYPE_REGEXP = /^\s*([^;\s]*)(?:;|\s|$)/;
+const CONTENT_DISPOSITION_REGEXP = /inline;filename=".*\.([a-z]+)";/i;
 const {DOCUMENTS_PATH, IMAGES_PATH, VIDEOS_PATH} = DeviceTypes;
 const DEFAULT_SERVER_MAX_FILE_SIZE = 50 * 1024 * 1024;// 50 Mb
 
@@ -88,9 +89,20 @@ export async function getFileCacheSize() {
 }
 
 export async function deleteFileCache() {
-    await RNFetchBlob.fs.unlink(DOCUMENTS_PATH);
-    await RNFetchBlob.fs.unlink(IMAGES_PATH);
-    await RNFetchBlob.fs.unlink(VIDEOS_PATH);
+    const isDocsDir = await RNFetchBlob.fs.isDir(DOCUMENTS_PATH);
+    const isImagesDir = await RNFetchBlob.fs.isDir(IMAGES_PATH);
+    const isVideosDir = await RNFetchBlob.fs.isDir(VIDEOS_PATH);
+    if (isDocsDir) {
+        await RNFetchBlob.fs.unlink(DOCUMENTS_PATH);
+    }
+
+    if (isImagesDir) {
+        await RNFetchBlob.fs.unlink(IMAGES_PATH);
+    }
+
+    if (isVideosDir) {
+        await RNFetchBlob.fs.unlink(VIDEOS_PATH);
+    }
     return true;
 }
 
@@ -219,6 +231,25 @@ function populateMaps() {
 export function getLocalFilePathFromFile(dir, file) {
     if (dir && file && file.caption && file.data && file.data.id) {
         return `${dir}/${file.data.id}-${decodeURIComponent(file.caption).replace(/\s+/g, '-')}`;
+    }
+
+    return null;
+}
+
+export function getExtensionFromContentDisposition(contentDisposition) {
+    const match = CONTENT_DISPOSITION_REGEXP.exec(contentDisposition);
+    let extension = match && match[1];
+    if (extension) {
+        if (!Object.keys(types).length) {
+            populateMaps();
+        }
+
+        extension = extension.toLowerCase();
+        if (types[extension]) {
+            return extension;
+        }
+
+        return null;
     }
 
     return null;

@@ -6,6 +6,7 @@ import PropTypes from 'prop-types';
 import {intlShape} from 'react-intl';
 import {
     ActivityIndicator,
+    DeviceEventEmitter,
     Image,
     Keyboard,
     KeyboardAvoidingView,
@@ -13,25 +14,27 @@ import {
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
 import Button from 'react-native-button';
-import RNFetchBlob from 'react-native-fetch-blob';
+import RNFetchBlob from 'rn-fetch-blob';
 
 import {Client4} from 'mattermost-redux/client';
 
 import ErrorText from 'app/components/error_text';
 import FormattedText from 'app/components/formatted_text';
-import QuickTextInput from 'app/components/quick_text_input';
-import {UpgradeTypes} from 'app/constants/view';
+import fetchConfig from 'app/fetch_preconfig';
 import mattermostBucket from 'app/mattermost_bucket';
-import PushNotifications from 'app/push_notifications';
 import {GlobalStyles} from 'app/styles';
-import checkUpgradeType from 'app/utils/client_upgrade';
+import {checkUpgradeType, isUpgradeAvailable} from 'app/utils/client_upgrade';
 import {isValidUrl, stripTrailingSlashes} from 'app/utils/url';
 import {preventDoubleTap} from 'app/utils/tap';
 import tracker from 'app/utils/time_tracker';
+import {t} from 'app/utils/i18n';
+
+import telemetry from 'app/telemetry';
 
 import LocalConfig from 'assets/config';
 
@@ -41,7 +44,7 @@ export default class SelectServer extends PureComponent {
             getPing: PropTypes.func.isRequired,
             handleServerUrlChanged: PropTypes.func.isRequired,
             handleSuccessfulLogin: PropTypes.func.isRequired,
-            getSession: PropTypes.func.isRequired,
+            scheduleExpiredNotification: PropTypes.func.isRequired,
             loadConfigAndLicense: PropTypes.func.isRequired,
             login: PropTypes.func.isRequired,
             resetPing: PropTypes.func.isRequired,
@@ -82,14 +85,18 @@ export default class SelectServer extends PureComponent {
         if (!allowOtherServers && serverUrl) {
             // If the app is managed or AutoSelectServerUrl is true in the Config, the server url is set and the user can't change it
             // we automatically trigger the ping to move to the next screen
-            this.onClick();
+            this.handleConnect();
         }
 
         if (Platform.OS === 'android') {
             Keyboard.addListener('keyboardDidHide', this.handleAndroidKeyboard);
         }
 
+        this.certificateListener = DeviceEventEmitter.addListener('RNFetchBlobCertificate', this.selectCertificate);
         this.props.navigator.setOnNavigatorEvent(this.handleNavigatorEvent);
+
+        telemetry.end(['start:select_server_screen']);
+        telemetry.save();
     }
 
     componentWillUpdate(nextProps, nextState) {
@@ -98,10 +105,10 @@ export default class SelectServer extends PureComponent {
                 this.props.actions.setLastUpgradeCheck();
                 const {currentVersion, minVersion, latestVersion} = nextProps;
                 const upgradeType = checkUpgradeType(currentVersion, minVersion, latestVersion);
-                if (upgradeType === UpgradeTypes.NO_UPGRADE) {
-                    this.handleLoginOptions(nextProps);
-                } else {
+                if (isUpgradeAvailable(upgradeType)) {
                     this.handleShowClientUpgrade(upgradeType);
+                } else {
+                    this.handleLoginOptions(nextProps);
                 }
             } else {
                 this.handleLoginOptions(nextProps);
@@ -110,10 +117,32 @@ export default class SelectServer extends PureComponent {
     }
 
     componentWillUnmount() {
+        this.certificateListener.remove();
         if (Platform.OS === 'android') {
             Keyboard.removeListener('keyboardDidHide', this.handleAndroidKeyboard);
         }
     }
+
+    blur = () => {
+        if (this.textInput) {
+            this.textInput.blur();
+        }
+    };
+
+    getUrl = () => {
+        const urlParse = require('url-parse');
+        let preUrl = urlParse(this.state.url, true);
+
+        if (!preUrl.host || preUrl.protocol === 'file:') {
+            preUrl = urlParse('https://' + stripTrailingSlashes(this.state.url), true);
+        }
+
+        if (preUrl.protocol === 'http:') {
+            preUrl.protocol = 'https:';
+        }
+
+        return stripTrailingSlashes(preUrl.protocol + '//' + preUrl.host + preUrl.pathname);
+    };
 
     goToNextScreen = (screen, title) => {
         const {navigator, theme} = this.props;
@@ -132,21 +161,106 @@ export default class SelectServer extends PureComponent {
         });
     };
 
+    handleAndroidKeyboard = () => {
+        this.blur();
+    };
+
+    handleConnect = preventDoubleTap(async () => {
+        const url = this.getUrl();
+
+        Keyboard.dismiss();
+
+        if (this.state.connecting || this.state.connected) {
+            this.cancelPing();
+
+            return;
+        }
+
+        if (!isValidUrl(url)) {
+            this.setState({
+                error: {
+                    intl: {
+                        id: t('mobile.server_url.invalid_format'),
+                        defaultMessage: 'URL must start with http:// or https://',
+                    },
+                },
+            });
+
+            return;
+        }
+
+        if (LocalConfig.ExperimentalClientSideCertEnable && Platform.OS === 'ios') {
+            RNFetchBlob.cba.selectCertificate((certificate) => {
+                if (certificate) {
+                    mattermostBucket.setPreference('cert', certificate);
+                    window.fetch = new RNFetchBlob.polyfill.Fetch({
+                        auto: true,
+                        certificate,
+                    }).build();
+                    this.pingServer(url);
+                }
+            });
+        } else {
+            this.pingServer(url);
+        }
+    });
+
+    handleLoginOptions = (props = this.props) => {
+        const {formatMessage} = this.context.intl;
+        const {config, license} = props;
+        const samlEnabled = config.EnableSaml === 'true' && license.IsLicensed === 'true' && license.SAML === 'true';
+        const gitlabEnabled = config.EnableSignUpWithGitLab === 'true';
+        const o365Enabled = config.EnableSignUpWithOffice365 === 'true' && license.IsLicensed === 'true' && license.Office365OAuth === 'true';
+
+        let options = 0;
+        if (samlEnabled || gitlabEnabled || o365Enabled) {
+            options += 1;
+        }
+
+        let screen;
+        let title;
+        if (options) {
+            screen = 'LoginOptions';
+            title = formatMessage({id: 'mobile.routes.loginOptions', defaultMessage: 'Login Chooser'});
+        } else {
+            screen = 'Login';
+            title = formatMessage({id: 'mobile.routes.login', defaultMessage: 'Login'});
+        }
+
+        this.props.actions.resetPing();
+
+        if (Platform.OS === 'ios') {
+            if (config.ExperimentalClientSideCertEnable === 'true' && config.ExperimentalClientSideCertCheck === 'primary') {
+                // log in automatically and send directly to the channel screen
+                this.loginWithCertificate();
+                return;
+            }
+
+            setTimeout(() => {
+                this.goToNextScreen(screen, title);
+            }, 350);
+        } else {
+            this.goToNextScreen(screen, title);
+        }
+    };
+
     handleNavigatorEvent = (event) => {
-        if (event.id === 'didDisappear') {
+        switch (event.id) {
+        case 'didDisappear':
             this.setState({
                 connected: false,
             });
+            break;
         }
     };
 
     handleShowClientUpgrade = (upgradeType) => {
-        const {intl} = this.context;
+        const {formatMessage} = this.context.intl;
         const {theme} = this.props;
 
         this.props.navigator.push({
             screen: 'ClientUpgrade',
-            title: intl.formatMessage({id: 'mobile.client_upgrade', defaultMessage: 'Client Upgrade'}),
+            title: formatMessage({id: 'mobile.client_upgrade', defaultMessage: 'Client Upgrade'}),
             backButtonTitle: '',
             navigatorStyle: {
                 navBarHidden: LocalConfig.AutoSelectServerUrl,
@@ -164,73 +278,22 @@ export default class SelectServer extends PureComponent {
         });
     };
 
-    handleLoginOptions = (props = this.props) => {
-        const {intl} = this.context;
-        const {config, license} = props;
-        const samlEnabled = config.EnableSaml === 'true' && license.IsLicensed === 'true' && license.SAML === 'true';
-        const gitlabEnabled = config.EnableSignUpWithGitLab === 'true';
-
-        let options = 0;
-        if (samlEnabled || gitlabEnabled) {
-            options += 1;
-        }
-
-        let screen;
-        let title;
-        if (options) {
-            screen = 'LoginOptions';
-            title = intl.formatMessage({id: 'mobile.routes.loginOptions', defaultMessage: 'Login Chooser'});
-        } else {
-            screen = 'Login';
-            title = intl.formatMessage({id: 'mobile.routes.login', defaultMessage: 'Login'});
-        }
-
-        this.props.actions.resetPing();
-
-        if (Platform.OS === 'ios' && LocalConfig.ExperimentalClientSideCertEnable) {
-            if (config.ExperimentalClientSideCertEnable === 'true' && config.ExperimentalClientSideCertCheck === 'primary') {
-                // log in automatically and send directly to the channel screen
-                this.loginWithCertificate();
-                return;
-            }
-
-            setTimeout(() => {
-                this.goToNextScreen(screen, title);
-            }, 350);
-        } else {
-            this.goToNextScreen(screen, title);
-        }
-    };
-
-    handleAndroidKeyboard = () => {
-        this.blur();
-    };
-
     handleTextChanged = (url) => {
         this.setState({url});
     };
 
+    inputRef = (ref) => {
+        this.textInput = ref;
+    };
+
     loginWithCertificate = async () => {
-        const {intl, navigator} = this.props;
+        const {navigator} = this.props;
 
         tracker.initialLoad = Date.now();
 
         await this.props.actions.login('credential', 'password');
         await this.props.actions.handleSuccessfulLogin();
-        const expiresAt = await this.props.actions.getSession();
-
-        if (expiresAt) {
-            PushNotifications.localNotificationSchedule({
-                date: new Date(expiresAt),
-                message: intl.formatMessage({
-                    id: 'mobile.session_expired',
-                    defaultMessage: 'Session Expired: Please log in to continue receiving notifications.',
-                }),
-                userInfo: {
-                    localNotification: true,
-                },
-            });
-        }
+        this.scheduleSessionExpiredNotification();
 
         navigator.resetTo({
             screen: 'Channel',
@@ -248,49 +311,7 @@ export default class SelectServer extends PureComponent {
         });
     };
 
-    onClick = preventDoubleTap(async () => {
-        const urlParse = require('url-parse');
-        const preUrl = urlParse(this.state.url, true);
-        const url = stripTrailingSlashes(preUrl.protocol + '//' + preUrl.host + preUrl.pathname);
-
-        Keyboard.dismiss();
-
-        if (this.state.connecting || this.state.connected) {
-            this.cancelPing();
-
-            return;
-        }
-
-        if (!isValidUrl(url)) {
-            this.setState({
-                error: {
-                    intl: {
-                        id: 'mobile.server_url.invalid_format',
-                        defaultMessage: 'URL must start with http:// or https://',
-                    },
-                },
-            });
-
-            return;
-        }
-
-        if (LocalConfig.ExperimentalClientSideCertEnable && Platform.OS === 'ios') {
-            RNFetchBlob.cba.selectCertificate((certificate) => {
-                if (certificate) {
-                    mattermostBucket.setPreference('cert', certificate, LocalConfig.AppGroupId);
-                    window.fetch = new RNFetchBlob.polyfill.Fetch({
-                        auto: true,
-                        certificate,
-                    }).build();
-                    this.pingServer(url);
-                }
-            });
-        } else {
-            this.pingServer(url);
-        }
-    });
-
-    pingServer = (url) => {
+    pingServer = (url, retryWithHttp = true) => {
         const {
             getPing,
             handleServerUrlChanged,
@@ -324,6 +345,11 @@ export default class SelectServer extends PureComponent {
                 return;
             }
 
+            if (result.error && retryWithHttp) {
+                this.pingServer(url.replace('https:', 'http:'), false);
+                return;
+            }
+
             if (!result.error) {
                 loadConfigAndLicense();
                 setServerVersion(Client4.getServerVersion());
@@ -345,14 +371,23 @@ export default class SelectServer extends PureComponent {
         });
     };
 
-    inputRef = (ref) => {
-        this.textInput = ref;
+    scheduleSessionExpiredNotification = () => {
+        const {intl} = this.context;
+        const {actions} = this.props;
+
+        actions.scheduleExpiredNotification(intl);
     };
 
-    blur = () => {
-        if (this.textInput) {
-            this.textInput.blur();
-        }
+    selectCertificate = () => {
+        const url = this.getUrl();
+        RNFetchBlob.cba.selectCertificate((certificate) => {
+            if (certificate) {
+                mattermostBucket.setPreference('cert', certificate);
+                fetchConfig().then(() => {
+                    this.pingServer(url, true);
+                });
+            }
+        });
     };
 
     render() {
@@ -406,6 +441,7 @@ export default class SelectServer extends PureComponent {
                 behavior='padding'
                 style={style.container}
                 keyboardVerticalOffset={0}
+                enabled={Platform.OS === 'ios'}
             >
                 <StatusBar barStyle={statusStyle}/>
                 <TouchableWithoutFeedback onPress={this.blur}>
@@ -421,12 +457,12 @@ export default class SelectServer extends PureComponent {
                                 defaultMessage='Enter Server URL'
                             />
                         </View>
-                        <QuickTextInput
+                        <TextInput
                             ref={this.inputRef}
                             value={url}
                             editable={!inputDisabled}
                             onChangeText={this.handleTextChanged}
-                            onSubmitEditing={this.onClick}
+                            onSubmitEditing={this.handleConnect}
                             style={inputStyle}
                             autoCapitalize='none'
                             autoCorrect={false}
@@ -440,7 +476,7 @@ export default class SelectServer extends PureComponent {
                             disableFullscreenUI={true}
                         />
                         <Button
-                            onPress={this.onClick}
+                            onPress={this.handleConnect}
                             containerStyle={[GlobalStyles.signupButton, style.connectButton]}
                         >
                             {buttonIcon}

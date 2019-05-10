@@ -5,10 +5,12 @@ import React, {Component} from 'react';
 import PropTypes from 'prop-types';
 import {
     FlatList,
+    Platform,
 } from 'react-native';
 
 import {RequestStatus} from 'mattermost-redux/constants';
 
+import AutocompleteDivider from 'app/components/autocomplete/autocomplete_divider';
 import {makeStyleSheetFromTheme} from 'app/utils/theme';
 
 import SlashSuggestionItem from './slash_suggestion_item';
@@ -25,6 +27,7 @@ export default class SlashSuggestion extends Component {
         commands: PropTypes.array,
         commandsRequest: PropTypes.object.isRequired,
         isSearch: PropTypes.bool,
+        maxListHeight: PropTypes.number,
         theme: PropTypes.object.isRequired,
         onChangeText: PropTypes.func.isRequired,
         onResultCountChange: PropTypes.func.isRequired,
@@ -110,9 +113,22 @@ export default class SlashSuggestion extends Component {
     completeSuggestion = (command) => {
         const {onChangeText} = this.props;
 
-        const completedDraft = `/${command} `;
+        // We are going to set a double / on iOS to prevent the auto correct from taking over and replacing it
+        // with the wrong value, this is a hack but I could not found another way to solve it
+        let completedDraft = `/${command} `;
+        if (Platform.OS === 'ios') {
+            completedDraft = `//${command} `;
+        }
 
         onChangeText(completedDraft);
+
+        if (Platform.OS === 'ios') {
+            // This is the second part of the hack were we replace the double / with just one
+            // after the auto correct vanished
+            setTimeout(() => {
+                onChangeText(completedDraft.replace(`//${command} `, `/${command} `));
+            });
+        }
 
         this.setState({
             active: false,
@@ -124,7 +140,6 @@ export default class SlashSuggestion extends Component {
 
     renderItem = ({item}) => (
         <SlashSuggestionItem
-            displayName={item.display_name}
             description={item.auto_complete_desc}
             hint={item.auto_complete_hint}
             onPress={this.completeSuggestion}
@@ -134,22 +149,25 @@ export default class SlashSuggestion extends Component {
     )
 
     render() {
+        const {maxListHeight, theme} = this.props;
+
         if (!this.state.active) {
             // If we are not in an active state return null so nothing is rendered
             // other components are not blocked.
             return null;
         }
 
-        const style = getStyleFromTheme(this.props.theme);
+        const style = getStyleFromTheme(theme);
 
         return (
             <FlatList
                 keyboardShouldPersistTaps='always'
-                style={style.listView}
+                style={[style.listView, {maxHeight: maxListHeight}]}
                 extraData={this.state}
                 data={this.state.dataSource}
                 keyExtractor={this.keyExtractor}
                 renderItem={this.renderItem}
+                ItemSeparatorComponent={AutocompleteDivider}
                 pageSize={10}
                 initialListSize={10}
             />

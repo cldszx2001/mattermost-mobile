@@ -14,7 +14,7 @@ import {
     View,
 } from 'react-native';
 import OpenFile from 'react-native-doc-viewer';
-import RNFetchBlob from 'react-native-fetch-blob';
+import RNFetchBlob from 'rn-fetch-blob';
 import {CircularProgress} from 'react-native-circular-progress';
 import {intlShape} from 'react-intl';
 import tinyColor from 'tinycolor2';
@@ -25,25 +25,27 @@ import {DeviceTypes} from 'app/constants/';
 import mattermostBucket from 'app/mattermost_bucket';
 import {changeOpacity} from 'app/utils/theme';
 
-import LocalConfig from 'assets/config';
-
 import FileAttachmentIcon from './file_attachment_icon';
 
 const {DOCUMENTS_PATH} = DeviceTypes;
-
+const DOWNLOADING_OFFSET = 28;
 const TEXT_PREVIEW_FORMATS = [
     'application/json',
     'application/x-x509-ca-cert',
     'text/plain',
 ];
+const circularProgressWidth = 4;
 
 export default class FileAttachmentDocument extends PureComponent {
     static propTypes = {
+        backgroundColor: PropTypes.string,
+        canDownloadFiles: PropTypes.bool.isRequired,
         iconHeight: PropTypes.number,
         iconWidth: PropTypes.number,
         file: PropTypes.object.isRequired,
         theme: PropTypes.object.isRequired,
         navigator: PropTypes.object,
+        onLongPress: PropTypes.func,
         wrapperHeight: PropTypes.number,
         wrapperWidth: PropTypes.number,
     };
@@ -62,13 +64,14 @@ export default class FileAttachmentDocument extends PureComponent {
     state = {
         didCancel: false,
         downloading: false,
+        preview: false,
         progress: 0,
     };
 
     componentDidMount() {
         this.mounted = true;
         this.eventEmitter = new NativeEventEmitter(NativeModules.RNReactNativeDocViewer);
-        this.eventEmitter.addListener('DoneButtonEvent', () => this.setStatusBarColor());
+        this.eventEmitter.addListener('DoneButtonEvent', this.onDonePreviewingFile);
     }
 
     componentWillUnmount() {
@@ -109,7 +112,7 @@ export default class FileAttachmentDocument extends PureComponent {
         this.setState({didCancel: false});
 
         try {
-            const certificate = await mattermostBucket.getPreference('cert', LocalConfig.AppGroupId);
+            const certificate = await mattermostBucket.getPreference('cert');
             const isDir = await RNFetchBlob.fs.isDir(DOCUMENTS_PATH);
             if (!isDir) {
                 try {
@@ -171,8 +174,13 @@ export default class FileAttachmentDocument extends PureComponent {
     };
 
     handlePreviewPress = async () => {
-        const {file} = this.props;
+        const {canDownloadFiles, file} = this.props;
         const {downloading, progress} = this.state;
+
+        if (!canDownloadFiles) {
+            this.showDownloadDisabledAlert();
+            return;
+        }
 
         if (downloading && progress < 100) {
             this.cancelDownload();
@@ -214,20 +222,26 @@ export default class FileAttachmentDocument extends PureComponent {
         }, delay);
     };
 
+    onDonePreviewingFile = () => {
+        this.setState({preview: false});
+        this.setStatusBarColor();
+    };
+
     openDocument = (file, delay = 2000) => {
         // The animation for the progress circle takes about 2 seconds to finish
         // therefore we are delaying the opening of the document to have the UI
         // shown nicely and smooth
         setTimeout(() => {
-            if (!this.state.didCancel && this.mounted) {
+            if (!this.state.didCancel && !this.state.preview && this.mounted) {
                 const {data} = file;
                 const prefix = Platform.OS === 'android' ? 'file:/' : '';
                 const path = `${DOCUMENTS_PATH}/${data.id}-${file.caption}`;
+                this.setState({preview: true});
                 this.setStatusBarColor('dark-content');
                 OpenFile.openDoc([{
                     url: `${prefix}${path}`,
                     fileNameOptional: file.caption,
-                    fileName: data.name,
+                    fileName: encodeURI(data.name.split('.').slice(0, -1).join('.')),
                     fileType: data.extension,
                     cache: false,
                 }], (error) => {
@@ -251,12 +265,18 @@ export default class FileAttachmentDocument extends PureComponent {
                                 }),
                             }]
                         );
-                        this.setStatusBarColor();
+                        this.onDonePreviewingFile();
                         RNFetchBlob.fs.unlink(path);
                     }
 
                     this.setState({downloading: false, progress: 0});
                 });
+
+                // Android does not trigger the event for DoneButtonEvent
+                // so we'll wait 4 seconds before enabling the tap for open the preview again
+                if (Platform.OS === 'android') {
+                    setTimeout(this.onDonePreviewingFile, 4000);
+                }
             }
         }, delay);
     };
@@ -274,19 +294,33 @@ export default class FileAttachmentDocument extends PureComponent {
     };
 
     renderProgress = () => {
-        const {iconHeight, iconWidth, file, theme, wrapperWidth} = this.props;
+        const {wrapperWidth} = this.props;
 
         return (
             <View style={[style.circularProgressContent, {width: wrapperWidth}]}>
-                <FileAttachmentIcon
-                    file={file.data}
-                    iconHeight={iconHeight}
-                    iconWidth={iconWidth}
-                    theme={theme}
-                    wrapperHeight={iconHeight}
-                    wrapperWidth={iconWidth}
-                />
+                {this.renderFileAttachmentIcon()}
             </View>
+        );
+    };
+
+    showDownloadDisabledAlert = () => {
+        const {intl} = this.context;
+
+        Alert.alert(
+            intl.formatMessage({
+                id: 'mobile.downloader.disabled_title',
+                defaultMessage: 'Download disabled',
+            }),
+            intl.formatMessage({
+                id: 'mobile.downloader.disabled_description',
+                defaultMessage: 'File downloads are disabled on this server. Please contact your System Admin for more details.\n',
+            }),
+            [{
+                text: intl.formatMessage({
+                    id: 'mobile.server_upgrade.button',
+                    defaultMessage: 'OK',
+                }),
+            }]
         );
     };
 
@@ -311,8 +345,32 @@ export default class FileAttachmentDocument extends PureComponent {
         );
     };
 
+    renderFileAttachmentIcon = () => {
+        const {backgroundColor, iconHeight, iconWidth, file, theme, wrapperHeight, wrapperWidth} = this.props;
+        const {downloading} = this.state;
+        let height = wrapperHeight;
+        let width = wrapperWidth;
+
+        if (downloading) {
+            height -= DOWNLOADING_OFFSET;
+            width -= DOWNLOADING_OFFSET;
+        }
+
+        return (
+            <FileAttachmentIcon
+                backgroundColor={backgroundColor}
+                file={file.data}
+                theme={theme}
+                iconHeight={iconHeight}
+                iconWidth={iconWidth}
+                wrapperHeight={height}
+                wrapperWidth={width}
+            />
+        );
+    }
+
     render() {
-        const {iconHeight, iconWidth, file, theme, wrapperHeight, wrapperWidth} = this.props;
+        const {onLongPress, theme, wrapperHeight} = this.props;
         const {downloading, progress} = this.state;
 
         let fileAttachmentComponent;
@@ -321,7 +379,7 @@ export default class FileAttachmentDocument extends PureComponent {
                 <CircularProgress
                     size={wrapperHeight}
                     fill={progress}
-                    width={4}
+                    width={circularProgressWidth}
                     backgroundColor={changeOpacity(theme.centerChannelColor, 0.5)}
                     tintColor={theme.linkColor}
                     rotation={0}
@@ -330,20 +388,14 @@ export default class FileAttachmentDocument extends PureComponent {
                 </CircularProgress>
             );
         } else {
-            fileAttachmentComponent = (
-                <FileAttachmentIcon
-                    file={file.data}
-                    theme={theme}
-                    iconHeight={iconHeight}
-                    iconWidth={iconWidth}
-                    wrapperHeight={wrapperHeight}
-                    wrapperWidth={wrapperWidth}
-                />
-            );
+            fileAttachmentComponent = this.renderFileAttachmentIcon();
         }
 
         return (
-            <TouchableOpacity onPress={this.handlePreviewPress}>
+            <TouchableOpacity
+                onPress={this.handlePreviewPress}
+                onLongPress={onLongPress}
+            >
                 {fileAttachmentComponent}
             </TouchableOpacity>
         );
@@ -355,7 +407,7 @@ const style = StyleSheet.create({
         alignItems: 'center',
         height: '100%',
         justifyContent: 'center',
-        left: 0,
+        left: -circularProgressWidth,
         position: 'absolute',
         top: 0,
     },

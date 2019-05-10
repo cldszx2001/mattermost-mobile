@@ -4,7 +4,7 @@
 import React, {PureComponent} from 'react';
 import PropTypes from 'prop-types';
 import {
-    InteractionManager,
+    Platform,
     Text,
     TouchableOpacity,
     View,
@@ -16,6 +16,7 @@ import AwesomeIcon from 'react-native-vector-icons/FontAwesome';
 
 import {General} from 'mattermost-redux/constants';
 import EventEmitter from 'mattermost-redux/utils/event_emitter';
+import {getLastPostIndex} from 'mattermost-redux/utils/post_list';
 
 import FormattedText from 'app/components/formatted_text';
 import Loading from 'app/components/loading';
@@ -45,16 +46,13 @@ Animatable.initializeRegistryWithDefinitions({
 export default class Permalink extends PureComponent {
     static propTypes = {
         actions: PropTypes.shape({
-            getPostsAfter: PropTypes.func.isRequired,
-            getPostsBefore: PropTypes.func.isRequired,
+            getPostsAround: PropTypes.func.isRequired,
             getPostThread: PropTypes.func.isRequired,
             getChannel: PropTypes.func.isRequired,
             handleSelectChannel: PropTypes.func.isRequired,
             handleTeamChange: PropTypes.func.isRequired,
             joinChannel: PropTypes.func.isRequired,
             loadThreadIfNecessary: PropTypes.func.isRequired,
-            markChannelAsRead: PropTypes.func.isRequired,
-            markChannelAsViewed: PropTypes.func.isRequired,
             selectPost: PropTypes.func.isRequired,
             setChannelDisplayName: PropTypes.func.isRequired,
             setChannelLoading: PropTypes.func.isRequired,
@@ -70,7 +68,6 @@ export default class Permalink extends PureComponent {
         myMembers: PropTypes.object.isRequired,
         navigator: PropTypes.object,
         onClose: PropTypes.func,
-        onPermalinkPress: PropTypes.func,
         onPress: PropTypes.func,
         postIds: PropTypes.array,
         theme: PropTypes.object.isRequired,
@@ -85,10 +82,49 @@ export default class Permalink extends PureComponent {
         intl: intlShape.isRequired,
     };
 
+    static getDerivedStateFromProps(nextProps, prevState) {
+        const newState = {};
+        if (nextProps.focusedPostId !== prevState.focusedPostIdState) {
+            newState.focusedPostIdState = nextProps.focusedPostId;
+        }
+
+        if (nextProps.channelId && nextProps.channelId !== prevState.channelIdState) {
+            newState.channelIdState = nextProps.channelId;
+        }
+
+        if (nextProps.channelName && nextProps.channelName !== prevState.channelNameState) {
+            newState.channelNameState = nextProps.channelName;
+        }
+
+        if (nextProps.postIds && nextProps.postIds.length > 0 && nextProps.postIds !== prevState.postIdsState) {
+            newState.postIdsState = nextProps.postIds;
+        }
+
+        if (nextProps.focusedPostId !== prevState.focusedPostIdState) {
+            let loading = true;
+            if (nextProps.postIds && nextProps.postIds.length >= 10) {
+                loading = false;
+            }
+
+            newState.loading = loading;
+        }
+
+        if (Object.keys(newState).length === 0) {
+            return null;
+        }
+
+        return newState;
+    }
+
     constructor(props) {
         super(props);
 
-        const {postIds, channelName} = props;
+        const {
+            postIds,
+            channelId,
+            channelName,
+            focusedPostId,
+        } = props;
         let loading = true;
 
         if (postIds && postIds.length >= 10) {
@@ -102,10 +138,14 @@ export default class Permalink extends PureComponent {
             loading,
             error: '',
             retry: false,
+            channelIdState: channelId,
+            channelNameState: channelName,
+            focusedPostIdState: focusedPostId,
+            postIdsState: postIds,
         };
     }
 
-    componentWillMount() {
+    componentDidMount() {
         this.mounted = true;
 
         if (this.state.loading) {
@@ -113,18 +153,9 @@ export default class Permalink extends PureComponent {
         }
     }
 
-    componentWillReceiveProps(nextProps) {
-        if (this.props.channelName !== nextProps.channelName && this.mounted) {
-            this.setState({title: nextProps.channelName});
-        }
-
-        if (this.props.focusedPostId !== nextProps.focusedPostId && this.mounted) {
-            this.setState({loading: true});
-            if (nextProps.postIds && nextProps.postIds.length < 10) {
-                this.loadPosts(nextProps);
-            } else {
-                this.setState({loading: false});
-            }
+    componentDidUpdate() {
+        if (this.state.loading) {
+            this.loadPosts(this.props);
         }
     }
 
@@ -137,7 +168,7 @@ export default class Permalink extends PureComponent {
         const channelId = post.channel_id;
         const rootId = (post.root_id || post.id);
 
-        actions.loadThreadIfNecessary(rootId, channelId);
+        actions.loadThreadIfNecessary(rootId);
         actions.selectPost(rootId);
 
         const options = {
@@ -174,12 +205,20 @@ export default class Permalink extends PureComponent {
         }
     };
 
+    handleHashtagPress = () => {
+        // Do nothing because we're already in a modal
+    };
+
+    handlePermalinkPress = () => {
+        // Do nothing because we're already in permalink view for a different post
+    };
+
     handlePress = () => {
-        const {channelId, channelName} = this.props;
+        const {channelIdState, channelNameState} = this.state;
 
         if (this.refs.view) {
             this.refs.view.growOut().then(() => {
-                this.jumpToChannel(channelId, channelName);
+                this.jumpToChannel(channelIdState, channelNameState);
             });
         }
     };
@@ -191,10 +230,8 @@ export default class Permalink extends PureComponent {
             const {
                 handleSelectChannel,
                 handleTeamChange,
-                markChannelAsRead,
                 setChannelLoading,
                 setChannelDisplayName,
-                markChannelAsViewed,
             } = actions;
 
             actions.selectPost('');
@@ -212,6 +249,9 @@ export default class Permalink extends PureComponent {
                         statusBarHideWithNavBar: false,
                         screenBackgroundColor: theme.centerChannelBg,
                     },
+                    passProps: {
+                        disableTermsModal: true,
+                    },
                 });
             }
 
@@ -222,19 +262,12 @@ export default class Permalink extends PureComponent {
             }
 
             if (channelTeamId && currentTeamId !== channelTeamId) {
-                handleTeamChange(channelTeamId, false);
+                handleTeamChange(channelTeamId);
             }
 
             setChannelLoading(channelId !== currentChannelId);
             setChannelDisplayName(channelDisplayName);
             handleSelectChannel(channelId);
-
-            InteractionManager.runAfterInteractions(async () => {
-                markChannelAsRead(channelId, currentChannelId);
-                if (channelId !== currentChannelId) {
-                    markChannelAsViewed(currentChannelId);
-                }
-            });
         }
     };
 
@@ -245,8 +278,8 @@ export default class Permalink extends PureComponent {
         let focusChannelId = channelId;
 
         const post = await actions.getPostThread(focusedPostId, false);
-        if (this.mounted && post.error && (!postIds || !postIds.length)) {
-            if (isPermalink && post.error.message.toLowerCase() !== 'network request failed') {
+        if (post.error && (!postIds || !postIds.length)) {
+            if (this.mounted && isPermalink && post.error.message.toLowerCase() !== 'network request failed') {
                 this.setState({
                     error: formatMessage({
                         id: 'permalink.error.access',
@@ -257,7 +290,7 @@ export default class Permalink extends PureComponent {
                         defaultMessage: 'No Results Found',
                     }),
                 });
-            } else {
+            } else if (this.mounted) {
                 this.setState({error: post.error.message, retry: true});
             }
 
@@ -265,22 +298,21 @@ export default class Permalink extends PureComponent {
         }
 
         if (!channelId) {
-            const focusedPost = post.data.posts[focusedPostId];
+            const focusedPost = post.data && post.data.posts ? post.data.posts[focusedPostId] : null;
             focusChannelId = focusedPost ? focusedPost.channel_id : '';
-            if (focusChannelId && !this.props.myMembers[focusChannelId]) {
+            if (focusChannelId) {
                 const {data: channel} = await actions.getChannel(focusChannelId);
-                if (channel && channel.type === General.OPEN_CHANNEL) {
+                if (!this.props.myMembers[focusChannelId] && channel && channel.type === General.OPEN_CHANNEL) {
                     await actions.joinChannel(currentUserId, channel.team_id, channel.id);
                 }
             }
         }
 
-        await Promise.all([
-            actions.getPostsBefore(focusChannelId, focusedPostId, 0, 10),
-            actions.getPostsAfter(focusChannelId, focusedPostId, 0, 10),
-        ]);
+        await actions.getPostsAround(focusChannelId, focusedPostId, 10);
 
-        this.setState({loading: false});
+        if (this.mounted) {
+            this.setState({loading: false});
+        }
     };
 
     onNavigatorEvent = (event) => {
@@ -300,18 +332,21 @@ export default class Permalink extends PureComponent {
         }
     };
 
-    archivedIcon = (style) => {
-        let ico = null;
+    archivedIcon = () => {
+        const style = getStyleSheet(this.props.theme);
+        let icon = null;
         if (this.props.channelIsArchived) {
-            ico = (<Text>
-                <AwesomeIcon
-                    name='archive'
-                    style={[style.archiveIcon]}
-                />
-                {' '}
-            </Text>);
+            icon = (
+                <Text>
+                    <AwesomeIcon
+                        name='archive'
+                        style={[style.archiveIcon]}
+                    />
+                    {' '}
+                </Text>
+            );
         }
-        return ico;
+        return icon;
     };
 
     render() {
@@ -319,11 +354,15 @@ export default class Permalink extends PureComponent {
             currentUserId,
             focusedPostId,
             navigator,
-            onPermalinkPress,
-            postIds,
             theme,
         } = this.props;
-        const {error, retry, loading, title} = this.state;
+        const {
+            error,
+            retry,
+            loading,
+            postIdsState,
+            title,
+        } = this.state;
         const style = getStyleSheet(theme);
 
         let postList;
@@ -352,12 +391,15 @@ export default class Permalink extends PureComponent {
                     isSearchResult={false}
                     shouldRenderReplyButton={false}
                     renderReplies={true}
-                    onPermalinkPress={onPermalinkPress}
+                    onHashtagPress={this.handleHashtagPress}
+                    onPermalinkPress={this.handlePermalinkPress}
                     onPostPress={this.goToThread}
-                    postIds={postIds}
+                    postIds={postIdsState}
+                    lastPostIndex={Platform.OS === 'android' ? getLastPostIndex(postIdsState) : -1}
                     currentUserId={currentUserId}
                     lastViewedAt={0}
                     navigator={navigator}
+                    highlightPinnedOrFlagged={false}
                 />
             );
         }
@@ -399,7 +441,7 @@ export default class Permalink extends PureComponent {
                                     numberOfLines={1}
                                     style={style.title}
                                 >
-                                    {this.archivedIcon(style)}
+                                    {this.archivedIcon()}
                                     {title}
                                 </Text>
                             </View>

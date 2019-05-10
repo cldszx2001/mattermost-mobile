@@ -14,7 +14,7 @@ import FormattedText from 'app/components/formatted_text';
 import FormattedTime from 'app/components/formatted_time';
 import FormattedDate from 'app/components/formatted_date';
 import ReplyIcon from 'app/components/reply_icon';
-import FlagIcon from 'app/components/flag_icon';
+import BotTag from 'app/components/bot_tag';
 import {emptyFunction} from 'app/utils/general';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
 
@@ -39,8 +39,8 @@ export default class PostHeader extends PureComponent {
         showFullDate: PropTypes.bool,
         theme: PropTypes.object.isRequired,
         username: PropTypes.string,
+        isBot: PropTypes.bool,
         userTimezone: PropTypes.string,
-        isFlagged: PropTypes.bool,
         enableTimezone: PropTypes.bool,
     };
 
@@ -63,6 +63,7 @@ export default class PostHeader extends PureComponent {
             isSystemMessage,
             fromAutoResponder,
             overrideUsername,
+            isBot,
         } = this.props;
 
         if (fromWebHook) {
@@ -76,12 +77,23 @@ export default class PostHeader extends PureComponent {
                     <Text style={style.displayName}>
                         {name}
                     </Text>
-                    <FormattedText
-                        id='post_info.bot'
-                        defaultMessage='BOT'
-                        style={style.bot}
+                    <BotTag
+                        theme={this.props.theme}
                     />
                 </View>
+            );
+        } else if (isBot) {
+            return (
+                <TouchableOpacity onPress={this.handleUsernamePress}>
+                    <View style={style.indicatorContainer}>
+                        <Text style={style.displayName}>
+                            {this.props.displayName}
+                        </Text>
+                        <BotTag
+                            theme={this.props.theme}
+                        />
+                    </View>
+                </TouchableOpacity>
             );
         } else if (fromAutoResponder) {
             let name = this.props.displayName;
@@ -181,7 +193,6 @@ export default class PostHeader extends PureComponent {
             shouldRenderReplyButton,
             showFullDate,
             theme,
-            isFlagged,
         } = this.props;
         const style = getStyleSheet(theme);
         const showReply = shouldRenderReplyButton || (!commentedOnDisplayName && commentCount > 0 && renderReplies);
@@ -215,22 +226,13 @@ export default class PostHeader extends PureComponent {
         }
 
         return (
-            <View>
+            <React.Fragment>
                 <View style={[style.postInfoContainer, (isPendingOrFailedPost && style.pendingPost)]}>
                     <View style={{flexDirection: 'row', flex: 1}}>
                         {this.getDisplayName(style)}
                         <View style={style.timeContainer}>
                             {dateComponent}
                         </View>
-                        {isFlagged &&
-                            <View style={style.flagContainer}>
-                                <FlagIcon
-                                    height={11}
-                                    width={11}
-                                    color={theme.linkColor}
-                                />
-                            </View>
-                        }
                     </View>
                     {showReply &&
                     <TouchableOpacity
@@ -253,7 +255,7 @@ export default class PostHeader extends PureComponent {
                     {this.renderCommentedOnMessage(style)}
                 </View>
                 }
-            </View>
+            </React.Fragment>
         );
     }
 }
@@ -302,17 +304,6 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
         },
         indicatorContainer: {
             flexDirection: 'row',
-        },
-        bot: {
-            alignSelf: 'center',
-            backgroundColor: changeOpacity(theme.centerChannelColor, 0.15),
-            borderRadius: 2,
-            color: theme.centerChannelColor,
-            fontSize: 10,
-            fontWeight: '600',
-            marginRight: 5,
-            paddingVertical: 2,
-            paddingHorizontal: 4,
         },
         displayName: {
             color: theme.centerChannelColor,

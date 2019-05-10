@@ -5,7 +5,6 @@ import React, {PureComponent} from 'react';
 import PropTypes from 'prop-types';
 import {
     Alert,
-    FlatList,
     InteractionManager,
     Text,
     TouchableOpacity,
@@ -15,18 +14,28 @@ import {
 import {RequestStatus} from 'mattermost-redux/constants';
 import EventEmitter from 'mattermost-redux/utils/event_emitter';
 
+import FailedNetworkAction from 'app/components/failed_network_action';
 import FormattedText from 'app/components/formatted_text';
 import Loading from 'app/components/loading';
 import StatusBar from 'app/components/status_bar';
-import {ListTypes} from 'app/constants';
 import {preventDoubleTap} from 'app/utils/tap';
 import {changeOpacity, makeStyleSheetFromTheme, setNavigatorStyles} from 'app/utils/theme';
+import {t} from 'app/utils/i18n';
+import CustomList from 'app/components/custom_list';
 
 import TeamIcon from 'app/components/team_icon';
 
-const VIEWABILITY_CONFIG = ListTypes.VISIBILITY_CONFIG_DEFAULTS;
+const TEAMS_PER_PAGE = 50;
 
-const TEAMS_PER_PAGE = 200;
+const errorTitle = {
+    id: t('error.team_not_found.title'),
+    defaultMessage: 'Team Not Found',
+};
+
+const errorDescription = {
+    id: t('mobile.failed_network_action.shortDescription'),
+    defaultMessage: 'Make sure you have an active connection and try again.',
+};
 
 export default class SelectTeam extends PureComponent {
     static propTypes = {
@@ -35,15 +44,13 @@ export default class SelectTeam extends PureComponent {
             handleTeamChange: PropTypes.func.isRequired,
             joinTeam: PropTypes.func.isRequired,
             logout: PropTypes.func.isRequired,
-            markChannelAsRead: PropTypes.func.isRequired,
         }).isRequired,
-        currentChannelId: PropTypes.string,
         currentUrl: PropTypes.string.isRequired,
-        joinTeamRequest: PropTypes.object.isRequired,
         navigator: PropTypes.object,
         userWithoutTeams: PropTypes.bool,
         teams: PropTypes.array.isRequired,
         theme: PropTypes.object,
+        teamsRequest: PropTypes.object.isRequired,
     };
 
     constructor(props) {
@@ -51,15 +58,16 @@ export default class SelectTeam extends PureComponent {
         props.navigator.setOnNavigatorEvent(this.onNavigatorEvent);
 
         this.state = {
+            loading: false,
             joining: false,
-            teams: null,
+            teams: [],
+            page: 0,
+            refreshing: false,
         };
     }
 
     componentDidMount() {
-        this.props.actions.getTeams(0, TEAMS_PER_PAGE).then(() => {
-            this.buildData(this.props);
-        });
+        this.getTeams();
     }
 
     componentWillReceiveProps(nextProps) {
@@ -70,11 +78,17 @@ export default class SelectTeam extends PureComponent {
         if (this.props.teams !== nextProps.teams) {
             this.buildData(nextProps);
         }
+    }
 
-        if (this.props.joinTeamRequest.status !== RequestStatus.FAILURE &&
-            nextProps.joinTeamRequest.status === RequestStatus.FAILURE) {
-            Alert.alert('', nextProps.joinTeamRequest.error.message);
-        }
+    getTeams = () => {
+        this.setState({loading: true});
+        this.props.actions.getTeams(this.state.page, TEAMS_PER_PAGE).then(() => {
+            this.setState((state) => ({
+                loading: false,
+                refreshing: false,
+                page: state.page + 1,
+            }));
+        });
     }
 
     buildData = (props) => {
@@ -82,7 +96,7 @@ export default class SelectTeam extends PureComponent {
             this.setState({teams: props.teams});
         } else {
             const teams = [{
-                id: 'mobile.select_team.no_teams',
+                id: t('mobile.select_team.no_teams'),
                 defaultMessage: 'There are no available teams for you to join.',
             }];
             this.setState({teams});
@@ -107,6 +121,9 @@ export default class SelectTeam extends PureComponent {
                 statusBarHideWithNavBar: false,
                 screenBackgroundColor: theme.centerChannelBg,
             },
+            passProps: {
+                disableTermsModal: true,
+            },
         });
     };
 
@@ -127,19 +144,15 @@ export default class SelectTeam extends PureComponent {
 
     onSelectTeam = async (team) => {
         this.setState({joining: true});
-        const {currentChannelId, userWithoutTeams} = this.props;
+        const {userWithoutTeams} = this.props;
         const {
             joinTeam,
             handleTeamChange,
-            markChannelAsRead,
         } = this.props.actions;
 
-        if (currentChannelId) {
-            markChannelAsRead(currentChannelId);
-        }
-
-        const success = await joinTeam(team.invite_id, team.id);
-        if (!success) {
+        const {error} = await joinTeam(team.invite_id, team.id);
+        if (error) {
+            Alert.alert(error.message);
             this.setState({joining: false});
             return;
         }
@@ -155,6 +168,12 @@ export default class SelectTeam extends PureComponent {
             });
         }
     };
+
+    onRefresh = () => {
+        this.setState({page: 0, refreshing: true}, () => {
+            this.getTeams();
+        });
+    }
 
     renderItem = ({item}) => {
         const {currentUrl, theme} = this.props;
@@ -217,6 +236,17 @@ export default class SelectTeam extends PureComponent {
             return <Loading/>;
         }
 
+        if (this.props.teamsRequest.status === RequestStatus.FAILURE) {
+            return (
+                <FailedNetworkAction
+                    onRetry={this.getTeams}
+                    theme={theme}
+                    errorTitle={errorTitle}
+                    errorDescription={errorDescription}
+                />
+            );
+        }
+
         return (
             <View style={styles.container}>
                 <StatusBar/>
@@ -230,11 +260,17 @@ export default class SelectTeam extends PureComponent {
                     </View>
                     <View style={styles.line}/>
                 </View>
-                <FlatList
+                <CustomList
                     data={teams}
+                    loading={this.state.loading}
+                    loadingComponent={<Loading/>}
+                    refreshing={this.state.refreshing}
+                    onRefresh={this.onRefresh}
+                    onLoadMore={this.getTeams}
                     renderItem={this.renderItem}
-                    keyExtractor={(item) => item.id}
-                    viewabilityConfig={VIEWABILITY_CONFIG}
+                    theme={theme}
+                    extraData={this.state.loading}
+                    shouldRenderSeparator={false}
                 />
             </View>
         );
@@ -284,7 +320,7 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
             fontSize: 18,
         },
         imageContainer: {
-            backgroundColor: theme.centerChannelBg,
+            backgroundColor: '#FFF',
         },
         noTeam: {
             color: theme.centerChannelColor,

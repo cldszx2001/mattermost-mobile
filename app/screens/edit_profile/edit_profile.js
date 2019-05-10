@@ -4,9 +4,10 @@
 import React, {PureComponent} from 'react';
 import PropTypes from 'prop-types';
 import {intlShape} from 'react-intl';
-import {View} from 'react-native';
-import RNFetchBlob from 'react-native-fetch-blob';
+import {Alert, View} from 'react-native';
+import RNFetchBlob from 'rn-fetch-blob';
 import {KeyboardAwareScrollView} from 'react-native-keyboard-aware-scroll-view';
+import {DocumentPickerUtil} from 'react-native-document-picker';
 
 import {Client4} from 'mattermost-redux/client';
 
@@ -14,38 +15,68 @@ import {buildFileUploadData, encodeHeaderURIStringToUTF8} from 'app/utils/file';
 import {emptyFunction} from 'app/utils/general';
 import {preventDoubleTap} from 'app/utils/tap';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
+import {t} from 'app/utils/i18n';
 
+import TextSetting from 'app/components/widgets/settings/text_setting';
 import Loading from 'app/components/loading';
 import ErrorText from 'app/components/error_text';
 import StatusBar from 'app/components/status_bar/index';
+import ProfilePictureButton from 'app/components/profile_picture_button';
 import ProfilePicture from 'app/components/profile_picture';
-import AttachmentButton from 'app/components/attachment_button';
+import mattermostBucket from 'app/mattermost_bucket';
 
-import EditProfileItem from './edit_profile_item';
+import {getFormattedFileSize} from 'mattermost-redux/utils/file_utils';
 
+const MAX_SIZE = 20 * 1024 * 1024;
+export const VALID_MIME_TYPES = [
+    'image/jpeg',
+    'image/jpeg',
+    'image/jpg',
+    'image/jp_',
+    'application/jpg',
+    'application/x-jpg',
+    'image/pjpeg',
+    'image/pipeg',
+    'image/vnd.swiftview-jpeg',
+    'image/x-xbitmap',
+    'image/png',
+    'application/png',
+    'application/x-png',
+    'image/bmp',
+    'image/x-bmp',
+    'image/x-bitmap',
+    'image/x-xbitmap',
+    'image/x-win-bitmap',
+    'image/x-windows-bmp',
+    'image/ms-bmp',
+    'image/x-ms-bmp',
+    'application/bmp',
+    'application/x-bmp',
+    'application/x-win-bitmap',
+];
 const holders = {
     firstName: {
-        id: 'user.settings.general.firstName',
+        id: t('user.settings.general.firstName'),
         defaultMessage: 'First Name',
     },
     lastName: {
-        id: 'user.settings.general.lastName',
+        id: t('user.settings.general.lastName'),
         defaultMessage: 'Last Name',
     },
     username: {
-        id: 'user.settings.general.username',
+        id: t('user.settings.general.username'),
         defaultMessage: 'Username',
     },
     nickname: {
-        id: 'user.settings.general.nickname',
+        id: t('user.settings.general.nickname'),
         defaultMessage: 'Nickname',
     },
     position: {
-        id: 'user.settings.general.position',
+        id: t('user.settings.general.position'),
         defaultMessage: 'Position',
     },
     email: {
-        id: 'user.settings.general.email',
+        id: t('user.settings.general.email'),
         defaultMessage: 'Email',
     },
 };
@@ -54,6 +85,7 @@ export default class EditProfile extends PureComponent {
     static propTypes = {
         actions: PropTypes.shape({
             setProfileImageUri: PropTypes.func.isRequired,
+            removeProfileImage: PropTypes.func.isRequired,
             updateUser: PropTypes.func.isRequired,
         }).isRequired,
         config: PropTypes.object.isRequired,
@@ -64,6 +96,10 @@ export default class EditProfile extends PureComponent {
 
     static contextTypes = {
         intl: intlShape,
+    };
+
+    leftButton = {
+        id: 'close-settings',
     };
 
     rightButton = {
@@ -77,10 +113,13 @@ export default class EditProfile extends PureComponent {
 
         const {email, first_name: firstName, last_name: lastName, nickname, position, username} = props.currentUser;
         const buttons = {
+            leftButtons: [this.leftButton],
             rightButtons: [this.rightButton],
         };
 
-        this.rightButton.title = context.intl.formatMessage({id: 'mobile.account.settings.save', defaultMessage: 'Save'});
+        this.leftButton.title = context.intl.formatMessage({id: t('mobile.account.settings.cancel'), defaultMessage: 'Cancel'});
+        this.rightButton.title = context.intl.formatMessage({id: t('mobile.account.settings.save'), defaultMessage: 'Save'});
+
         props.navigator.setOnNavigatorEvent(this.onNavigatorEvent);
         props.navigator.setButtons(buttons);
 
@@ -152,6 +191,7 @@ export default class EditProfile extends PureComponent {
 
         const {
             profileImage,
+            profileImageRemove,
             firstName,
             lastName,
             username,
@@ -167,11 +207,15 @@ export default class EditProfile extends PureComponent {
             position,
             email,
         };
-        const {actions} = this.props;
+        const {actions, currentUser} = this.props;
 
         if (profileImage) {
             actions.setProfileImageUri(profileImage.uri);
             this.uploadProfileImage().catch(this.handleUploadError);
+        }
+
+        if (profileImageRemove) {
+            actions.removeProfileImage(currentUser.id);
         }
 
         if (this.canUpdate()) {
@@ -191,14 +235,24 @@ export default class EditProfile extends PureComponent {
         this.emitCanUpdateAccount(true);
     };
 
-    uploadProfileImage = () => {
+    handleRemoveProfileImage = () => {
+        this.setState({profileImageRemove: true});
+        this.emitCanUpdateAccount(true);
+        this.props.navigator.dismissModal({
+            animationType: 'none',
+        });
+    }
+
+    uploadProfileImage = async () => {
         const {profileImage} = this.state;
         const {currentUser} = this.props;
         const fileData = buildFileUploadData(profileImage);
 
         const headers = {
             Authorization: `Bearer ${Client4.getToken()}`,
+            'X-Requested-With': 'XMLHttpRequest',
             'Content-Type': 'multipart/form-data',
+            'X-CSRF-Token': Client4.csrf,
         };
 
         const fileInfo = {
@@ -208,10 +262,17 @@ export default class EditProfile extends PureComponent {
             type: fileData.type,
         };
 
-        return RNFetchBlob.fetch('POST', `${Client4.getUserRoute(currentUser.id)}/image`, headers, [fileInfo]);
+        const certificate = await mattermostBucket.getPreference('cert');
+        const options = {
+            timeout: 10000,
+            certificate,
+        };
+
+        return RNFetchBlob.config(options).fetch('POST', `${Client4.getUserRoute(currentUser.id)}/image`, headers, [fileInfo]);
     };
 
-    updateField = (field) => {
+    updateField = (id, name) => {
+        const field = {[id]: name};
         this.setState(field, () => {
             this.emitCanUpdateAccount(this.canUpdate(field));
         });
@@ -230,6 +291,31 @@ export default class EditProfile extends PureComponent {
         }
     };
 
+    onShowFileSizeWarning = (filename) => {
+        const {formatMessage} = this.context.intl;
+        const fileSizeWarning = formatMessage({
+            id: 'file_upload.fileAbove',
+            defaultMessage: 'File above {max}MB cannot be uploaded: {filename}',
+        }, {
+            max: getFormattedFileSize({size: MAX_SIZE}),
+            filename,
+        });
+
+        Alert.alert(fileSizeWarning);
+    };
+
+    onShowUnsupportedMimeTypeWarning = () => {
+        const {formatMessage} = this.context.intl;
+        const fileTypeWarning = formatMessage({
+            id: 'mobile.file_upload.unsupportedMimeType',
+            defaultMessage: 'Only files of the following MIME type can be uploaded: {mimeTypes}',
+        }, {
+            mimeTypes: VALID_MIME_TYPES.join('\n'),
+        });
+
+        Alert.alert('', fileTypeWarning);
+    };
+
     renderFirstNameSettings = () => {
         const {formatMessage} = this.context.intl;
         const {config, currentUser, theme} = this.props;
@@ -240,15 +326,15 @@ export default class EditProfile extends PureComponent {
             (service === 'saml' && config.SamlFirstNameAttributeSet === 'true');
 
         return (
-            <EditProfileItem
+            <TextSetting
                 disabled={disabled}
-                field='firstName'
-                format={holders.firstName}
-                helpText={formatMessage({
+                id='firstName'
+                label={holders.firstName}
+                disabledText={formatMessage({
                     id: 'user.settings.general.field_handled_externally',
                     defaultMessage: 'This field is handled through your login provider. If you want to change it, you need to do so through your login provider.',
                 })}
-                updateValue={this.updateField}
+                onChange={this.updateField}
                 theme={theme}
                 value={firstName}
             />
@@ -266,15 +352,15 @@ export default class EditProfile extends PureComponent {
 
         return (
             <View>
-                <EditProfileItem
+                <TextSetting
                     disabled={disabled}
-                    field='lastName'
-                    format={holders.lastName}
-                    helpText={formatMessage({
+                    id='lastName'
+                    label={holders.lastName}
+                    disabledText={formatMessage({
                         id: 'user.settings.general.field_handled_externally',
                         defaultMessage: 'This field is handled through your login provider. If you want to change it, you need to do so through your login provider.',
                     })}
-                    updateValue={this.updateField}
+                    onChange={this.updateField}
                     theme={theme}
                     value={lastName}
                 />
@@ -289,16 +375,16 @@ export default class EditProfile extends PureComponent {
         const disabled = currentUser.auth_service !== '';
 
         return (
-            <EditProfileItem
+            <TextSetting
                 disabled={disabled}
-                field='username'
-                format={holders.username}
-                helpText={formatMessage({
+                id='username'
+                label={holders.username}
+                disabledText={formatMessage({
                     id: 'user.settings.general.field_handled_externally',
                     defaultMessage: 'This field is handled through your login provider. If you want to change it, you need to do so through your login provider.',
                 })}
                 maxLength={22}
-                updateValue={this.updateField}
+                onChange={this.updateField}
                 theme={theme}
                 value={username}
             />
@@ -307,21 +393,17 @@ export default class EditProfile extends PureComponent {
 
     renderEmailSettings = () => {
         const {formatMessage} = this.context.intl;
-        const {config, currentUser, theme} = this.props;
+        const {currentUser, theme} = this.props;
         const {email} = this.state;
 
         let helpText;
-        let disabled = false;
 
-        if (config.SendEmailNotifications !== 'true') {
-            disabled = true;
+        if (currentUser.auth_service === '') {
             helpText = formatMessage({
-                id: 'user.settings.general.emailHelp1',
-                defaultMessage: 'Email is used for sign-in, notifications, and password reset. Email requires verification if changed.',
+                id: 'user.settings.general.emailCantUpdate',
+                defaultMessage: 'Email must be updated using a web client or desktop application.',
             });
-        } else if (currentUser.auth_service !== '') {
-            disabled = true;
-
+        } else {
             switch (currentUser.auth_service) {
             case 'gitlab':
                 helpText = formatMessage({
@@ -358,12 +440,12 @@ export default class EditProfile extends PureComponent {
 
         return (
             <View>
-                <EditProfileItem
-                    disabled={disabled}
-                    field='email'
-                    format={holders.email}
-                    helpText={helpText}
-                    updateValue={this.updateField}
+                <TextSetting
+                    disabled={true}
+                    id='email'
+                    label={holders.email}
+                    disabledText={helpText}
+                    onChange={this.updateField}
                     theme={theme}
                     value={email}
                 />
@@ -381,16 +463,16 @@ export default class EditProfile extends PureComponent {
             (service === 'saml' && config.SamlNicknameAttributeSet === 'true');
 
         return (
-            <EditProfileItem
+            <TextSetting
                 disabled={disabled}
-                field='nickname'
-                format={holders.nickname}
-                helpText={formatMessage({
+                id='nickname'
+                label={holders.nickname}
+                disabledText={formatMessage({
                     id: 'user.settings.general.field_handled_externally',
                     defaultMessage: 'This field is handled through your login provider. If you want to change it, you need to do so through your login provider.',
                 })}
                 maxLength={22}
-                updateValue={this.updateField}
+                onChange={this.updateField}
                 theme={theme}
                 value={nickname}
             />
@@ -406,16 +488,16 @@ export default class EditProfile extends PureComponent {
         const disabled = (service === 'ldap' || service === 'saml') && config.PositionAttribute === 'true';
 
         return (
-            <EditProfileItem
+            <TextSetting
                 disabled={disabled}
-                field='position'
-                format={holders.position}
-                helpText={formatMessage({
+                id='position'
+                label={holders.position}
+                disabledText={formatMessage({
                     id: 'user.settings.general.field_handled_externally',
                     defaultMessage: 'This field is handled through your login provider. If you want to change it, you need to do so through your login provider.',
                 })}
                 maxLength={128}
-                updateValue={this.updateField}
+                onChange={this.updateField}
                 theme={theme}
                 value={position}
             />
@@ -426,7 +508,7 @@ export default class EditProfile extends PureComponent {
         this.scrollView = ref;
     };
 
-    render() {
+    renderProfilePicture = () => {
         const {
             currentUser,
             theme,
@@ -435,12 +517,53 @@ export default class EditProfile extends PureComponent {
 
         const {
             profileImage,
+            profileImageRemove,
+        } = this.state;
+
+        const style = getStyleSheet(theme);
+        const uri = profileImage ? profileImage.uri : null;
+
+        return (
+            <View style={style.top}>
+                <ProfilePictureButton
+                    currentUser={currentUser}
+                    theme={theme}
+                    blurTextBox={emptyFunction}
+                    browseFileTypes={DocumentPickerUtil.images()}
+                    canTakeVideo={false}
+                    canBrowseVideoLibrary={false}
+                    maxFileSize={MAX_SIZE}
+                    navigator={navigator}
+                    wrapper={true}
+                    uploadFiles={this.handleUploadProfileImage}
+                    removeProfileImage={this.handleRemoveProfileImage}
+                    onShowFileSizeWarning={this.onShowFileSizeWarning}
+                    onShowUnsupportedMimeTypeWarning={this.onShowUnsupportedMimeTypeWarning}
+                    validMimeTypes={VALID_MIME_TYPES}
+                >
+                    <ProfilePicture
+                        userId={currentUser.id}
+                        size={150}
+                        statusBorderWidth={6}
+                        statusSize={40}
+                        edit={true}
+                        imageUri={uri}
+                        profileImageRemove={profileImageRemove}
+                    />
+                </ProfilePictureButton>
+            </View>
+        );
+    }
+
+    render() {
+        const {theme} = this.props;
+
+        const {
             error,
             updating,
         } = this.state;
 
         const style = getStyleSheet(theme);
-        const uri = profileImage ? profileImage.uri : null;
 
         if (updating) {
             return (
@@ -475,24 +598,7 @@ export default class EditProfile extends PureComponent {
                 >
                     {displayError}
                     <View style={[style.scrollView]}>
-                        <View style={style.top}>
-                            <AttachmentButton
-                                blurTextBox={emptyFunction}
-                                theme={theme}
-                                navigator={navigator}
-                                wrapper={true}
-                                uploadFiles={this.handleUploadProfileImage}
-                            >
-                                <ProfilePicture
-                                    userId={currentUser.id}
-                                    size={150}
-                                    statusBorderWidth={6}
-                                    statusSize={40}
-                                    edit={true}
-                                    imageUri={uri}
-                                />
-                            </AttachmentButton>
-                        </View>
+                        {this.renderProfilePicture()}
                         {this.renderFirstNameSettings()}
                         <View style={style.separator}/>
                         {this.renderLastNameSettings()}
@@ -540,6 +646,7 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
         },
         errorText: {
             fontSize: 14,
+            marginHorizontal: 15,
         },
         separator: {
             height: 15,
@@ -550,4 +657,3 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
         },
     };
 });
-

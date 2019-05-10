@@ -13,10 +13,11 @@ import {getFullName} from 'mattermost-redux/utils/user_utils';
 import {General} from 'mattermost-redux/constants';
 import {injectIntl, intlShape} from 'react-intl';
 
-import Loading from 'app/components/loading';
 import ProfilePicture from 'app/components/profile_picture';
+import BotTag from 'app/components/bot_tag';
 import {preventDoubleTap} from 'app/utils/tap';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
+import {t} from 'app/utils/i18n';
 
 class ChannelIntro extends PureComponent {
     static propTypes = {
@@ -24,7 +25,6 @@ class ChannelIntro extends PureComponent {
         currentChannel: PropTypes.object.isRequired,
         currentChannelMembers: PropTypes.array.isRequired,
         intl: intlShape.isRequired,
-        isLoadingPosts: PropTypes.bool,
         navigator: PropTypes.object.isRequired,
         theme: PropTypes.object.isRequired,
     };
@@ -92,16 +92,24 @@ class ChannelIntro extends PureComponent {
         const {currentChannelMembers, theme} = this.props;
         const style = getStyleSheet(theme);
 
-        return currentChannelMembers.map((member, index) => (
-            <TouchableOpacity
-                key={member.id}
-                onPress={preventDoubleTap(() => this.goToUserProfile(member.id))}
-            >
-                <Text style={style.displayName}>
-                    {index === currentChannelMembers.length - 1 ? this.getDisplayName(member) : `${this.getDisplayName(member)}, `}
-                </Text>
-            </TouchableOpacity>
-        ));
+        return currentChannelMembers.map((member, index) => {
+            return (
+                <TouchableOpacity
+                    key={member.id}
+                    onPress={preventDoubleTap(() => this.goToUserProfile(member.id))}
+                >
+                    <View style={style.indicatorContainer}>
+                        <Text style={style.displayName}>
+                            {index === currentChannelMembers.length - 1 ? this.getDisplayName(member) : `${this.getDisplayName(member)}, `}
+                        </Text>
+                        <BotTag
+                            show={Boolean(member.is_bot)}
+                            theme={theme}
+                        />
+                    </View>
+                </TouchableOpacity>
+            );
+        });
     };
 
     buildDMContent = () => {
@@ -154,29 +162,21 @@ class ChannelIntro extends PureComponent {
         if (creator) {
             const creatorName = this.getDisplayName(creator);
             mainMessageIntl = {
-                id: 'intro_messages.creator',
-                defaultMessage: 'This is the start of the {name} {type}, created by {creator} on {date}.',
+                id: t('intro_messages.creator'),
+                defaultMessage: 'This is the start of the {name} channel, created by {creator} on {date}.',
                 values: {
                     name: currentChannel.display_name,
                     creator: creatorName,
                     date,
-                    type: intl.formatMessage({
-                        id: 'intro_messages.channel',
-                        defaultMessage: 'channel',
-                    }),
                 },
             };
         } else {
             mainMessageIntl = {
-                id: 'intro_messages.noCreator',
-                defaultMessage: 'This is the start of the {name} {type}, created on {date}.',
+                id: t('intro_messages.noCreator'),
+                defaultMessage: 'This is the start of the {name} channel, created on {date}.',
                 values: {
                     name: currentChannel.display_name,
                     date,
-                    type: intl.formatMessage({
-                        id: 'intro_messages.channel',
-                        defaultMessage: 'channel',
-                    }),
                 },
             };
         }
@@ -220,16 +220,12 @@ class ChannelIntro extends PureComponent {
         });
 
         const mainMessage = intl.formatMessage({
-            id: 'intro_messages.creator',
-            defaultMessage: 'This is the start of the {name} {type}, created by {creator} on {date}.',
+            id: 'intro_messages.creatorPrivate',
+            defaultMessage: 'This is the start of the {name} private channel, created by {creator} on {date}.',
         }, {
             name: currentChannel.display_name,
             creator: creatorName,
             date,
-            type: intl.formatMessage({
-                id: 'intro_messages.group',
-                defaultMessage: 'private channel',
-            }),
         });
 
         const onlyInvitedMessage = intl.formatMessage({
@@ -311,17 +307,9 @@ class ChannelIntro extends PureComponent {
     };
 
     render() {
-        const {currentChannel, isLoadingPosts, theme} = this.props;
+        const {currentChannel, theme} = this.props;
         const style = getStyleSheet(theme);
         const channelType = currentChannel.type;
-
-        if (isLoadingPosts) {
-            return (
-                <View style={style.container}>
-                    <Loading/>
-                </View>
-            );
-        }
 
         let profiles;
         if (channelType === General.DM_CHANNEL || channelType === General.GM_CHANNEL) {
@@ -364,6 +352,7 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
             marginTop: 60,
             marginHorizontal: 12,
             marginBottom: 12,
+            overflow: 'hidden',
         },
         displayName: {
             color: theme.centerChannelColor,
@@ -389,6 +378,9 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
             flexDirection: 'row',
             flexWrap: 'wrap',
             justifyContent: 'flex-start',
+        },
+        indicatorContainer: {
+            flexDirection: 'row',
         },
     };
 });

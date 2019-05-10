@@ -1,31 +1,53 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`NotificationSettingsMobileAndroid should match snapshot 1`] = `
+exports[`NotificationSettingsEmailAndroid should match snapshot 1`] = `
 <sectionItem
   action={[Function]}
   actionType="default"
   description={
-    <InjectIntl(FormattedText)
+    <FormattedText
       defaultMessage="Immediately"
       id="user.settings.notifications.email.immediately"
     />
   }
   label={
-    <InjectIntl(FormattedText)
+    <FormattedText
       defaultMessage="Send email notifications"
       id="user.settings.notifications.email.send"
     />
   }
   theme={
     Object {
-      "centerChannelBg": "#aaa",
-      "centerChannelColor": "#aaa",
+      "awayIndicator": "#ffbc42",
+      "buttonBg": "#166de0",
+      "buttonColor": "#ffffff",
+      "centerChannelBg": "#ffffff",
+      "centerChannelColor": "#3d3c40",
+      "codeTheme": "github",
+      "dndIndicator": "#f74343",
+      "errorTextColor": "#fd5960",
+      "linkColor": "#2389d7",
+      "mentionBj": "#ffffff",
+      "mentionColor": "#145dbf",
+      "mentionHighlightBg": "#ffe577",
+      "mentionHighlightLink": "#166de0",
+      "newMessageSeparator": "#ff8800",
+      "onlineIndicator": "#06d6a0",
+      "sidebarBg": "#145dbf",
+      "sidebarHeaderBg": "#1153ab",
+      "sidebarHeaderTextColor": "#ffffff",
+      "sidebarText": "#ffffff",
+      "sidebarTextActiveBorder": "#579eff",
+      "sidebarTextActiveColor": "#ffffff",
+      "sidebarTextHoverBg": "#4578bf",
+      "sidebarUnreadText": "#ffffff",
+      "type": "Mattermost",
     }
   }
 />
 `;
 
-exports[`NotificationSettingsMobileAndroid should match snapshot 2`] = `
+exports[`NotificationSettingsEmailAndroid should match snapshot 2`] = `
 <Component
   animationType="slide"
   hardwareAccelerated={false}
@@ -33,24 +55,22 @@ exports[`NotificationSettingsMobileAndroid should match snapshot 2`] = `
   transparent={true}
   visible={false}
 >
-  <Component
-    style={undefined}
-  >
-    <Component
+  <View>
+    <View
       style={Object {}}
     >
-      <Component
+      <View
         style={Object {}}
       >
-        <Component
+        <View
           style={Object {}}
         >
-          <InjectIntl(FormattedText)
+          <FormattedText
             defaultMessage="Send email notifications"
             id="user.settings.notifications.email.send"
             style={Object {}}
           />
-        </Component>
+        </View>
         <RadioButtonGroup
           name="emailSettings"
           onSelect={[Function]}
@@ -69,7 +89,7 @@ exports[`NotificationSettingsMobileAndroid should match snapshot 2`] = `
             ]
           }
         />
-        <InjectIntl(FormattedText)
+        <FormattedText
           defaultMessage="Email notifications are sent for mentions and direct messages when you are offline or away from {siteName} for more than 5 minutes."
           id="user.settings.notifications.emailInfo"
           style={Object {}}
@@ -79,14 +99,14 @@ exports[`NotificationSettingsMobileAndroid should match snapshot 2`] = `
             }
           }
         />
-      </Component>
-      <Component
+      </View>
+      <View
         style={Object {}}
       >
-        <Component
+        <View
           style={Object {}}
         />
-        <Component
+        <View
           style={Object {}}
         >
           <TouchableOpacity
@@ -94,14 +114,14 @@ exports[`NotificationSettingsMobileAndroid should match snapshot 2`] = `
             onPress={[Function]}
             style={Object {}}
           >
-            <InjectIntl(FormattedText)
+            <FormattedText
               defaultMessage="CANCEL"
               id="mobile.notification_settings.modal_cancel"
               style={Object {}}
             />
           </TouchableOpacity>
-          <Component>
-            <Component
+          <View>
+            <View
               style={
                 Object {
                   "marginRight": 10,
@@ -113,16 +133,16 @@ exports[`NotificationSettingsMobileAndroid should match snapshot 2`] = `
               onPress={[Function]}
               style={Object {}}
             >
-              <InjectIntl(FormattedText)
+              <FormattedText
                 defaultMessage="SAVE"
                 id="mobile.notification_settings.modal_save"
                 style={Object {}}
               />
             </TouchableOpacity>
-          </Component>
-        </Component>
-      </Component>
-    </Component>
-  </Component>
+          </View>
+        </View>
+      </View>
+    </View>
+  </View>
 </Component>
 `;

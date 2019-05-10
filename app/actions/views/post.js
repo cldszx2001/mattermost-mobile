@@ -2,7 +2,9 @@
 // See LICENSE.txt for license information.
 
 import {Posts} from 'mattermost-redux/constants';
-import {PostTypes} from 'mattermost-redux/action_types';
+import {doPostAction, receivedNewPost} from 'mattermost-redux/actions/posts';
+
+import {ViewTypes} from 'app/constants';
 
 import {generateId} from 'app/utils/file';
 
@@ -25,15 +27,34 @@ export function sendAddToChannelEphemeralPost(user, addedUsername, message, chan
             },
         };
 
+        dispatch(receivedNewPost(post));
+    };
+}
+
+export function setAutocompleteSelector(dataSource, onSelect, options) {
+    return {
+        type: ViewTypes.SELECTED_ACTION_MENU,
+        data: {
+            dataSource,
+            onSelect,
+            options,
+        },
+    };
+}
+
+export function selectAttachmentMenuAction(postId, actionId, text, value) {
+    return (dispatch) => {
         dispatch({
-            type: PostTypes.RECEIVED_POSTS,
+            type: ViewTypes.SUBMIT_ATTACHMENT_MENU_ACTION,
+            postId,
             data: {
-                order: [],
-                posts: {
-                    [post.id]: post,
+                [actionId]: {
+                    text,
+                    value,
                 },
             },
-            channelId,
         });
+
+        dispatch(doPostAction(postId, actionId, value));
     };
 }

@@ -4,7 +4,7 @@
 import {connect} from 'react-redux';
 
 import {Preferences} from 'mattermost-redux/constants';
-import {getPost, makeGetCommentCountForPost} from 'mattermost-redux/selectors/entities/posts';
+import {makeGetCommentCountForPost} from 'mattermost-redux/selectors/entities/posts';
 import {getBool, getTeammateNameDisplaySetting, getTheme} from 'mattermost-redux/selectors/entities/preferences';
 import {getUser, getCurrentUser} from 'mattermost-redux/selectors/entities/users';
 import {isPostPendingOrFailed, isSystemMessage} from 'mattermost-redux/utils/post_utils';
@@ -21,7 +21,7 @@ function makeMapStateToProps() {
     const getCommentCountForPost = makeGetCommentCountForPost();
     return function mapStateToProps(state, ownProps) {
         const config = getConfig(state);
-        const post = getPost(state, ownProps.postId);
+        const post = ownProps.post;
         const commentedOnUser = getUser(state, ownProps.commentedOnUserId);
         const user = getUser(state, post.user_id) || {};
         const currentUser = getCurrentUser(state);
@@ -36,14 +36,15 @@ function makeMapStateToProps() {
             createAt: post.create_at,
             displayName: displayUsername(user, teammateNameDisplay),
             enablePostUsernameOverride: config.EnablePostUsernameOverride === 'true',
-            fromWebHook: post.props && post.props.from_webhook === 'true',
+            fromWebHook: post?.props?.from_webhook === 'true', // eslint-disable-line camelcase
             militaryTime,
             isPendingOrFailedPost: isPostPendingOrFailed(post),
             isSystemMessage: isSystemMessage(post),
             fromAutoResponder: fromAutoResponder(post),
-            overrideUsername: post.props && post.props.override_username,
+            overrideUsername: post?.props?.override_username, // eslint-disable-line camelcase
             theme: getTheme(state),
             username: user.username,
+            isBot: user.is_bot || false,
             userTimezone,
         };
     };

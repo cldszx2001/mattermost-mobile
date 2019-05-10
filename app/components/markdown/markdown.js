@@ -15,6 +15,7 @@ import AtMention from 'app/components/at_mention';
 import ChannelLink from 'app/components/channel_link';
 import Emoji from 'app/components/emoji';
 import FormattedText from 'app/components/formatted_text';
+import Hashtag from 'app/components/markdown/hashtag';
 import CustomPropTypes from 'app/constants/custom_prop_types';
 import {blendColors, concatStyles, makeStyleSheetFromTheme} from 'app/utils/theme';
 import {getScheme} from 'app/utils/url';
@@ -29,30 +30,45 @@ import MarkdownTable from './markdown_table';
 import MarkdownTableImage from './markdown_table_image';
 import MarkdownTableRow from './markdown_table_row';
 import MarkdownTableCell from './markdown_table_cell';
-import {addListItemIndices, pullOutImages} from './transform';
+import {
+    addListItemIndices,
+    combineTextNodes,
+    highlightMentions,
+    pullOutImages,
+} from './transform';
 
 export default class Markdown extends PureComponent {
     static propTypes = {
         autolinkedUrlSchemes: PropTypes.array.isRequired,
         baseTextStyle: CustomPropTypes.Style,
         blockStyles: PropTypes.object,
+        channelMentions: PropTypes.object,
+        imagesMetadata: PropTypes.object,
         isEdited: PropTypes.bool,
         isReplyPost: PropTypes.bool,
         isSearchResult: PropTypes.bool,
+        mentionKeys: PropTypes.array.isRequired,
+        minimumHashtagLength: PropTypes.number.isRequired,
         navigator: PropTypes.object.isRequired,
         onChannelLinkPress: PropTypes.func,
-        onLongPress: PropTypes.func,
+        onHashtagPress: PropTypes.func,
         onPermalinkPress: PropTypes.func,
         onPostPress: PropTypes.func,
         textStyles: PropTypes.object,
         theme: PropTypes.object.isRequired,
         value: PropTypes.string.isRequired,
+        disableHashtags: PropTypes.bool,
+        disableAtMentions: PropTypes.bool,
+        disableChannelLink: PropTypes.bool,
     };
 
     static defaultProps = {
         textStyles: {},
         blockStyles: {},
         onLongPress: () => true,
+        disableHashtags: false,
+        disableAtMentions: false,
+        disableChannelLink: false,
     };
 
     constructor(props) {
@@ -65,14 +81,15 @@ export default class Markdown extends PureComponent {
     createParser = () => {
         return new Parser({
             urlFilter: this.urlFilter,
+            minimumHashtagLength: this.props.minimumHashtagLength,
         });
-    }
+    };
 
     urlFilter = (url) => {
         const scheme = getScheme(url);
 
         return !scheme || this.props.autolinkedUrlSchemes.indexOf(scheme) !== -1;
-    }
+    };
 
     createRenderer = () => {
         return new Renderer({
@@ -88,6 +105,7 @@ export default class Markdown extends PureComponent {
                 atMention: this.renderAtMention,
                 channelLink: this.renderChannelLink,
                 emoji: this.renderEmoji,
+                hashtag: this.renderHashtag,
 
                 paragraph: this.renderParagraph,
                 heading: this.renderHeading,
@@ -108,12 +126,14 @@ export default class Markdown extends PureComponent {
                 table_row: MarkdownTableRow,
                 table_cell: MarkdownTableCell,
 
+                mention_highlight: Renderer.forwardChildren,
+
                 editedIndicator: this.renderEditedIndicator,
             },
             renderParagraphsInLists: true,
             getExtraPropsForNode: this.getExtraPropsForNode,
         });
-    }
+    };
 
     getExtraPropsForNode = (node) => {
         const extraProps = {
@@ -127,34 +147,33 @@ export default class Markdown extends PureComponent {
         }
 
         return extraProps;
-    }
+    };
 
     computeTextStyle = (baseStyle, context) => {
         return concatStyles(baseStyle, context.map((type) => this.props.textStyles[type]));
-    }
+    };
 
     renderText = ({context, literal}) => {
         if (context.indexOf('image') !== -1) {
             // If this text is displayed, it will be styled by the image component
             return <Text>{literal}</Text>;
         }
-        const style = this.computeTextStyle(this.props.baseTextStyle, context);
 
         // Construct the text style based off of the parents of this node since RN's inheritance is limited
+        const style = this.computeTextStyle(this.props.baseTextStyle, context);
+
         return <Text style={style}>{literal}</Text>;
-    }
+    };
 
     renderCodeSpan = ({context, literal}) => {
         return <Text style={this.computeTextStyle([this.props.baseTextStyle, this.props.textStyles.code], context)}>{literal}</Text>;
-    }
+    };
 
     renderImage = ({linkDestination, reactChildren, context, src}) => {
         if (context.indexOf('table') !== -1) {
             // We have enough problems rendering images as is, so just render a link inside of a table
             return (
                 <MarkdownTableImage
-                    linkDestination={linkDestination}
-                    onLongPress={this.props.onLongPress}
                     source={src}
                     textStyle={[this.computeTextStyle(this.props.baseTextStyle, context), this.props.textStyles.link]}
                     navigator={this.props.navigator}
@@ -167,41 +186,49 @@ export default class Markdown extends PureComponent {
         return (
             <MarkdownImage
                 linkDestination={linkDestination}
+                imagesMetadata={this.props.imagesMetadata}
                 isReplyPost={this.props.isReplyPost}
                 navigator={this.props.navigator}
-                onLongPress={this.props.onLongPress}
                 source={src}
                 errorTextStyle={[this.computeTextStyle(this.props.baseTextStyle, context), this.props.textStyles.error]}
             >
                 {reactChildren}
             </MarkdownImage>
         );
-    }
+    };
 
     renderAtMention = ({context, mentionName}) => {
+        if (this.props.disableAtMentions) {
+            return this.renderText({context, literal: `@${mentionName}`});
+        }
+
         return (
             <AtMention
                 mentionStyle={this.props.textStyles.mention}
                 textStyle={this.computeTextStyle(this.props.baseTextStyle, context)}
                 isSearchResult={this.props.isSearchResult}
                 mentionName={mentionName}
-                onLongPress={this.props.onLongPress}
                 onPostPress={this.props.onPostPress}
                 navigator={this.props.navigator}
             />
         );
-    }
+    };
 
     renderChannelLink = ({context, channelName}) => {
+        if (this.props.disableChannelLink) {
+            return this.renderText({context, literal: `~${channelName}`});
+        }
+
         return (
             <ChannelLink
                 linkStyle={this.props.textStyles.link}
                 textStyle={this.computeTextStyle(this.props.baseTextStyle, context)}
                 onChannelLinkPress={this.props.onChannelLinkPress}
                 channelName={channelName}
+                channelMentions={this.props.channelMentions}
             />
         );
-    }
+    };
 
     renderEmoji = ({context, emojiName, literal}) => {
         return (
@@ -211,7 +238,22 @@ export default class Markdown extends PureComponent {
                 textStyle={this.computeTextStyle(this.props.baseTextStyle, context)}
             />
         );
-    }
+    };
+
+    renderHashtag = ({context, hashtag}) => {
+        if (this.props.disableHashtags) {
+            return this.renderText({context, literal: `#${hashtag}`});
+        }
+
+        return (
+            <Hashtag
+                hashtag={hashtag}
+                linkStyle={this.props.textStyles.link}
+                onHashtagPress={this.props.onHashtagPress}
+                navigator={this.props.navigator}
+            />
+        );
+    };
 
     renderParagraph = ({children, first}) => {
         if (!children || children.length === 0) {
@@ -230,7 +272,7 @@ export default class Markdown extends PureComponent {
                 </Text>
             </View>
         );
-    }
+    };
 
     renderHeading = ({children, level}) => {
         const containerStyle = [
@@ -245,7 +287,7 @@ export default class Markdown extends PureComponent {
                 </Text>
             </View>
         );
-    }
+    };
 
     renderCodeBlock = (props) => {
         // These sometimes include a trailing newline
@@ -257,10 +299,9 @@ export default class Markdown extends PureComponent {
                 content={content}
                 language={props.language}
                 textStyle={this.props.textStyles.codeBlock}
-                onLongPress={this.props.onLongPress}
             />
         );
-    }
+    };
 
     renderBlockQuote = ({children, ...otherProps}) => {
         return (
@@ -271,7 +312,7 @@ export default class Markdown extends PureComponent {
                 {children}
             </MarkdownBlockQuote>
         );
-    }
+    };
 
     renderList = ({children, start, tight, type}) => {
         return (
@@ -283,7 +324,7 @@ export default class Markdown extends PureComponent {
                 {children}
             </MarkdownList>
         );
-    }
+    };
 
     renderListItem = ({children, context, ...otherProps}) => {
         const level = context.filter((type) => type === 'list').length;
@@ -297,19 +338,19 @@ export default class Markdown extends PureComponent {
                 {children}
             </MarkdownListItem>
         );
-    }
+    };
 
     renderHardBreak = () => {
         return <Text>{'\n'}</Text>;
-    }
+    };
 
     renderThematicBreak = () => {
         return <View style={this.props.blockStyles.horizontalRule}/>;
-    }
+    };
 
     renderSoftBreak = () => {
         return <Text>{'\n'}</Text>;
-    }
+    };
 
     renderHtml = (props) => {
         let rendered = this.renderText(props);
@@ -325,27 +366,29 @@ export default class Markdown extends PureComponent {
         }
 
         return rendered;
-    }
+    };
 
-    renderTable = ({children}) => {
+    renderTable = ({children, numColumns}) => {
         return (
-            <MarkdownTable navigator={this.props.navigator}>
+            <MarkdownTable
+                navigator={this.props.navigator}
+                numColumns={numColumns}
+            >
                 {children}
             </MarkdownTable>
         );
-    }
+    };
 
     renderLink = ({children, href}) => {
         return (
             <MarkdownLink
                 href={href}
-                onLongPress={this.props.onLongPress}
                 onPermalinkPress={this.props.onPermalinkPress}
             >
                 {children}
             </MarkdownLink>
         );
-    }
+    };
 
     renderEditedIndicator = ({context}) => {
         let spacer = '';
@@ -370,13 +413,15 @@ export default class Markdown extends PureComponent {
                 />
             </Text>
         );
-    }
+    };
 
     render() {
         let ast = this.parser.parse(this.props.value);
 
+        ast = combineTextNodes(ast);
         ast = addListItemIndices(ast);
         ast = pullOutImages(ast);
+        ast = highlightMentions(ast, this.props.mentionKeys);
 
         if (this.props.isEdited) {
             const editIndicatorNode = new Node('edited_indicator');

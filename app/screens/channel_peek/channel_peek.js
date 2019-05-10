@@ -3,7 +3,9 @@
 
 import React, {PureComponent} from 'react';
 import PropTypes from 'prop-types';
-import {View} from 'react-native';
+import {Platform, View} from 'react-native';
+
+import {getLastPostIndex} from 'mattermost-redux/utils/post_list';
 
 import PostList from 'app/components/post_list';
 import {makeStyleSheetFromTheme} from 'app/utils/theme';
@@ -12,7 +14,7 @@ export default class ChannelPeek extends PureComponent {
     static propTypes = {
         actions: PropTypes.shape({
             loadPostsIfNecessaryWithRetry: PropTypes.func.isRequired,
-            markChannelAsRead: PropTypes.func.isRequired,
+            markChannelViewedAndRead: PropTypes.func.isRequired,
         }).isRequired,
         channelId: PropTypes.string.isRequired,
         currentUserId: PropTypes.string,
@@ -23,6 +25,7 @@ export default class ChannelPeek extends PureComponent {
     };
 
     static defaultProps = {
+        postIds: [],
         postVisibility: 15,
     };
 
@@ -58,7 +61,7 @@ export default class ChannelPeek extends PureComponent {
         if (event.type === 'PreviewActionPress') {
             if (event.id === 'action-mark-as-read') {
                 const {actions, channelId} = this.props;
-                actions.markChannelAsRead(channelId);
+                actions.markChannelViewedAndRead(channelId);
             }
         }
     };
@@ -79,6 +82,7 @@ export default class ChannelPeek extends PureComponent {
             <View style={style.container}>
                 <PostList
                     postIds={visiblePostIds}
+                    lastPostIndex={Platform.OS === 'android' ? getLastPostIndex(visiblePostIds) : -1}
                     renderReplies={true}
                     indicateNewMessages={true}
                     currentUserId={currentUserId}

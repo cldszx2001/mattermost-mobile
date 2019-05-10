@@ -4,44 +4,57 @@
 /* eslint-disable max-nested-callbacks */
 
 import React from 'react';
-import {configure, shallow} from 'enzyme';
-import Adapter from 'enzyme-adapter-react-16';
-configure({adapter: new Adapter()});
+import {shallow} from 'enzyme';
+
+import Preferences from 'mattermost-redux/constants/preferences';
 
 import DateHeader from './date_header.js';
 
 describe('DateHeader', () => {
     const baseProps = {
-        theme: {centerChannelBg: '#aaa', centerChannelColor: '#aaa'},
+        theme: Preferences.THEMES.default,
+        timeZone: null,
     };
 
     describe('component should match snapshot', () => {
         it('without suffix', () => {
             const props = {
                 ...baseProps,
-                dateLineString: 'date-1531152392',
-                index: 0,
+                date: 1531152392,
             };
             const wrapper = shallow(
                 <DateHeader {...props}/>,
                 {context: {intl: {formatMessage: jest.fn()}}},
             );
 
-            expect(wrapper).toMatchSnapshot();
+            expect(wrapper.getElement()).toMatchSnapshot();
         });
 
         it('with suffix', () => {
             const props = {
                 ...baseProps,
-                dateLineString: 'date-1531152392-index-2',
-                index: 2,
+                date: 1531152392,
             };
             const wrapper = shallow(
                 <DateHeader {...props}/>,
                 {context: {intl: {formatMessage: jest.fn()}}},
             );
 
-            expect(wrapper).toMatchSnapshot();
+            expect(wrapper.getElement()).toMatchSnapshot();
+        });
+
+        it('when timezone is set', () => {
+            const props = {
+                ...baseProps,
+                date: 1531152392,
+                timeZone: 'America/New_York',
+            };
+            const wrapper = shallow(
+                <DateHeader {...props}/>,
+                {context: {intl: {formatMessage: jest.fn()}}},
+            );
+
+            expect(wrapper.getElement()).toMatchSnapshot();
         });
     });
 });

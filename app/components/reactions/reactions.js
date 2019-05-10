@@ -7,9 +7,11 @@ import {
     Image,
     ScrollView,
     TouchableOpacity,
-    View,
 } from 'react-native';
+import {intlShape} from 'react-intl';
+import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 
+import {preventDoubleTap} from 'app/utils/tap';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
 import addReactionIcon from 'assets/images/icons/reaction.png';
 
@@ -22,24 +24,58 @@ export default class Reactions extends PureComponent {
             getReactionsForPost: PropTypes.func.isRequired,
             removeReaction: PropTypes.func.isRequired,
         }).isRequired,
-        highlightedReactions: PropTypes.array.isRequired,
-        onAddReaction: PropTypes.func.isRequired,
+        currentUserId: PropTypes.string.isRequired,
+        navigator: PropTypes.object.isRequired,
         position: PropTypes.oneOf(['right', 'left']),
         postId: PropTypes.string.isRequired,
-        reactions: PropTypes.object.isRequired,
+        reactions: PropTypes.object,
         theme: PropTypes.object.isRequired,
         canAddReaction: PropTypes.bool,
         canRemoveReaction: PropTypes.bool.isRequired,
-    }
+    };
 
     static defaultProps = {
         position: 'right',
     };
 
+    static contextTypes = {
+        intl: intlShape.isRequired,
+    };
+
     componentDidMount() {
-        const {actions, postId} = this.props;
-        actions.getReactionsForPost(postId);
+        const {actions, postId, reactions} = this.props;
+        if (!reactions) {
+            actions.getReactionsForPost(postId);
+        }
     }
+
+    handleAddReaction = preventDoubleTap(() => {
+        const {formatMessage} = this.context.intl;
+        const {navigator, theme} = this.props;
+
+        MaterialIcon.getImageSource('close', 20, theme.sidebarHeaderTextColor).then((source) => {
+            navigator.showModal({
+                screen: 'AddReaction',
+                title: formatMessage({id: 'mobile.post_info.add_reaction', defaultMessage: 'Add Reaction'}),
+                animated: true,
+                navigatorStyle: {
+                    navBarTextColor: theme.sidebarHeaderTextColor,
+                    navBarBackgroundColor: theme.sidebarHeaderBg,
+                    navBarButtonColor: theme.sidebarHeaderTextColor,
+                    screenBackgroundColor: theme.centerChannelBg,
+                },
+                passProps: {
+                    closeButton: source,
+                    onEmojiPress: this.handleAddReactionToPost,
+                },
+            });
+        });
+    });
+
+    handleAddReactionToPost = (emoji) => {
+        const {postId} = this.props;
+        this.props.actions.addReaction(postId, emoji);
+    };
 
     handleReactionPress = (emoji, remove) => {
         const {actions, postId} = this.props;
@@ -50,17 +86,55 @@ export default class Reactions extends PureComponent {
         }
     };
 
-    renderReactions = () => {
-        const {highlightedReactions, reactions, theme} = this.props;
+    showReactionList = () => {
+        const {navigator, postId} = this.props;
 
-        return Array.from(reactions.keys()).map((r) => {
+        const options = {
+            screen: 'ReactionList',
+            animationType: 'none',
+            backButtonTitle: '',
+            navigatorStyle: {
+                navBarHidden: true,
+                navBarTransparent: true,
+                screenBackgroundColor: 'transparent',
+                modalPresentationStyle: 'overCurrentContext',
+            },
+            passProps: {
+                postId,
+            },
+        };
+
+        navigator.showModal(options);
+    }
+
+    renderReactions = () => {
+        const {currentUserId, navigator, reactions, theme, postId} = this.props;
+        const highlightedReactions = [];
+        const reactionsByName = Object.values(reactions).reduce((acc, reaction) => {
+            if (acc.has(reaction.emoji_name)) {
+                acc.get(reaction.emoji_name).push(reaction);
+            } else {
+                acc.set(reaction.emoji_name, [reaction]);
+            }
+
+            if (reaction.user_id === currentUserId) {
+                highlightedReactions.push(reaction.emoji_name);
+            }
+
+            return acc;
+        }, new Map());
+
+        return Array.from(reactionsByName.keys()).map((r) => {
             return (
                 <Reaction
                     key={r}
-                    count={reactions.get(r).length}
+                    count={reactionsByName.get(r).length}
                     emojiName={r}
                     highlight={highlightedReactions.includes(r)}
+                    navigator={navigator}
                     onPress={this.handleReactionPress}
+                    onLongPress={this.showReactionList}
+                    postId={postId}
                     theme={theme}
                 />
             );
@@ -71,7 +145,7 @@ export default class Reactions extends PureComponent {
         const {position, reactions, canAddReaction} = this.props;
         const styles = getStyleSheet(this.props.theme);
 
-        if (!reactions.size) {
+        if (!reactions) {
             return null;
         }
 
@@ -80,7 +154,7 @@ export default class Reactions extends PureComponent {
             addMoreReactions = (
                 <TouchableOpacity
                     key='addReaction'
-                    onPress={this.props.onAddReaction}
+                    onPress={this.handleAddReaction}
                     style={[styles.reaction]}
                 >
                     <Image
@@ -108,24 +182,19 @@ export default class Reactions extends PureComponent {
         }
 
         return (
-            <View style={styles.container}>
-                <ScrollView
-                    alwaysBounceHorizontal={false}
-                    horizontal={true}
-                    overScrollMode='never'
-                >
-                    {reactionElements}
-                </ScrollView>
-            </View>
+            <ScrollView
+                alwaysBounceHorizontal={false}
+                horizontal={true}
+                overScrollMode='never'
+            >
+                {reactionElements}
+            </ScrollView>
         );
     }
 }
 
 const getStyleSheet = makeStyleSheetFromTheme((theme) => {
     return {
-        container: {
-            flex: 1,
-        },
         addReaction: {
             tintColor: changeOpacity(theme.centerChannelColor, 0.5),
             width: 23,

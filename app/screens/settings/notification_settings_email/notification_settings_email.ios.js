@@ -13,6 +13,7 @@ import {Preferences} from 'mattermost-redux/constants';
 import FormattedText from 'app/components/formatted_text';
 import StatusBar from 'app/components/status_bar';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
+import {t} from 'app/utils/i18n';
 
 import Section from 'app/screens/settings/section';
 import SectionItem from 'app/screens/settings/section_item';
@@ -27,14 +28,14 @@ class NotificationSettingsEmailIos extends NotificationSettingsEmailBase {
             siteName,
             theme,
         } = this.props;
-        const {interval} = this.state;
+        const {newInterval} = this.state;
         const style = getStyleSheet(theme);
 
         return (
             <Section
-                headerId='mobile.notification_settings.email.send'
+                headerId={t('mobile.notification_settings.email.send')}
                 headerDefaultMessage='SEND EMAIL NOTIFICATIONS'
-                footerId='user.settings.notifications.emailInfo'
+                footerId={t('user.settings.notifications.emailInfo')}
                 footerDefaultMessage='Email notifications are sent for mentions and direct messages when you are offline or away from {siteName} for more than 5 minutes.'
                 footerValues={{siteName}}
                 disableFooter={!sendEmailNotifications}
@@ -49,10 +50,10 @@ class NotificationSettingsEmailIos extends NotificationSettingsEmailBase {
                                 defaultMessage='Immediately'
                             />
                         )}
-                        action={this.setEmailNotifications}
+                        action={this.setEmailInterval}
                         actionType='select'
                         actionValue={Preferences.INTERVAL_IMMEDIATE.toString()}
-                        selected={interval === Preferences.INTERVAL_IMMEDIATE.toString()}
+                        selected={newInterval === Preferences.INTERVAL_IMMEDIATE.toString()}
                         theme={theme}
                     />
                     <View style={style.separator}/>
@@ -65,10 +66,10 @@ class NotificationSettingsEmailIos extends NotificationSettingsEmailBase {
                                     defaultMessage='Every 15 minutes'
                                 />
                             )}
-                            action={this.setEmailNotifications}
+                            action={this.setEmailInterval}
                             actionType='select'
                             actionValue={Preferences.INTERVAL_FIFTEEN_MINUTES.toString()}
-                            selected={interval === Preferences.INTERVAL_FIFTEEN_MINUTES.toString()}
+                            selected={newInterval === Preferences.INTERVAL_FIFTEEN_MINUTES.toString()}
                             theme={theme}
                         />
                         <View style={style.separator}/>
@@ -79,10 +80,10 @@ class NotificationSettingsEmailIos extends NotificationSettingsEmailBase {
                                     defaultMessage='Every hour'
                                 />
                             )}
-                            action={this.setEmailNotifications}
+                            action={this.setEmailInterval}
                             actionType='select'
                             actionValue={Preferences.INTERVAL_HOUR.toString()}
-                            selected={interval === Preferences.INTERVAL_HOUR.toString()}
+                            selected={newInterval === Preferences.INTERVAL_HOUR.toString()}
                             theme={theme}
                         />
                         <View style={style.separator}/>
@@ -95,10 +96,10 @@ class NotificationSettingsEmailIos extends NotificationSettingsEmailBase {
                                 defaultMessage='Never'
                             />
                         )}
-                        action={this.setEmailNotifications}
+                        action={this.setEmailInterval}
                         actionType='select'
                         actionValue={Preferences.INTERVAL_NEVER.toString()}
-                        selected={interval === Preferences.INTERVAL_NEVER.toString()}
+                        selected={newInterval === Preferences.INTERVAL_NEVER.toString()}
                         theme={theme}
                     />
                 </View>

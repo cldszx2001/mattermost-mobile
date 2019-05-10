@@ -1,7 +1,7 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {StackNavigator as stackNavigator} from 'react-navigation';
+import {createAppContainer, createStackNavigator} from 'react-navigation';
 
 import {Preferences} from 'mattermost-redux/constants';
 
@@ -10,7 +10,7 @@ import ExtensionPost from './extension_post';
 import ExtensionTeams from './extension_teams';
 
 const theme = Preferences.THEMES.default;
-const Navigation = stackNavigator({
+const Navigation = createStackNavigator({
     Post: {
         screen: ExtensionPost,
     },
@@ -21,7 +21,7 @@ const Navigation = stackNavigator({
         screen: ExtensionChannels,
     },
 }, {
-    navigationOptions: {
+    defaultNavigationOptions: {
         headerStyle: {
             backgroundColor: theme.sidebarHeaderBg,
         },
@@ -38,4 +38,4 @@ const Navigation = stackNavigator({
     },
 });
 
-export default Navigation;
+export default createAppContainer(Navigation);

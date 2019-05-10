@@ -4,8 +4,12 @@
 import {bindActionCreators} from 'redux';
 import {connect} from 'react-redux';
 
-import {getChannel as getChannelAction, joinChannel, markChannelAsRead, markChannelAsViewed} from 'mattermost-redux/actions/channels';
-import {getPostsAfter, getPostsBefore, getPostThread, selectPost} from 'mattermost-redux/actions/posts';
+import {getChannel as getChannelAction, joinChannel} from 'mattermost-redux/actions/channels';
+import {
+    getPostsAround,
+    getPostThread,
+    selectPost,
+} from 'mattermost-redux/actions/posts';
 import {makeGetChannel, getMyChannelMemberships} from 'mattermost-redux/selectors/entities/channels';
 import {makeGetPostIdsAroundPost, getPost} from 'mattermost-redux/selectors/entities/posts';
 import {getTheme} from 'mattermost-redux/selectors/entities/preferences';
@@ -18,6 +22,7 @@ import {
     setChannelDisplayName,
     setChannelLoading,
 } from 'app/actions/views/channel';
+import {showSearchModal} from 'app/actions/views/search';
 import {handleTeamChange} from 'app/actions/views/select_team';
 
 import Permalink from './permalink';
@@ -59,19 +64,17 @@ function makeMapStateToProps() {
 function mapDispatchToProps(dispatch) {
     return {
         actions: bindActionCreators({
-            getPostsAfter,
-            getPostsBefore,
+            getPostsAround,
             getPostThread,
             getChannel: getChannelAction,
             handleSelectChannel,
             handleTeamChange,
             joinChannel,
             loadThreadIfNecessary,
-            markChannelAsRead,
-            markChannelAsViewed,
             selectPost,
             setChannelDisplayName,
             setChannelLoading,
+            showSearchModal,
         }, dispatch),
     };
 }

@@ -5,13 +5,13 @@ import PropTypes from 'prop-types';
 import {
     InteractionManager,
     Keyboard,
+    TextInput,
+    TouchableWithoutFeedback,
     StyleSheet,
     View,
-    TouchableWithoutFeedback,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-import QuickTextInput from 'app/components/quick_text_input';
 import CustomPropTypes from 'app/constants/custom_prop_types';
 import {changeOpacity} from 'app/utils/theme';
 
@@ -44,6 +44,7 @@ export default class SearchBarAndroid extends PureComponent {
         showArrow: PropTypes.bool,
         value: PropTypes.string,
         containerStyle: CustomPropTypes.Style,
+        leftComponent: PropTypes.element,
     };
 
     static defaultProps = {
@@ -63,24 +64,15 @@ export default class SearchBarAndroid extends PureComponent {
         onBlur: () => true,
         onSelectionChange: () => true,
         value: '',
+        leftComponent: null,
     };
 
     constructor(props) {
         super(props);
         this.state = {
-            value: props.value,
             isFocused: false,
+            refocusInput: true,
         };
-    }
-
-    static getDerivedStateFromProps(nextProps, prevState) {
-        if (nextProps.value !== prevState.value) {
-            return {
-                value: nextProps.value,
-            };
-        }
-
-        return null;
     }
 
     cancel = () => {
@@ -93,10 +85,12 @@ export default class SearchBarAndroid extends PureComponent {
 
     onSearchButtonPress = () => {
         const {value} = this.props;
-
-        if (value) {
-            this.props.onSearchButtonPress(value);
-        }
+        this.setState({refocusInput: false}, () => {
+            if (value) {
+                this.props.onSearchButtonPress(value);
+            }
+            this.setState({refocusInput: true});
+        });
     };
 
     onCancelButtonPress = () => {
@@ -104,7 +98,6 @@ export default class SearchBarAndroid extends PureComponent {
         InteractionManager.runAfterInteractions(() => {
             this.setState({
                 isFocused: false,
-                value: '',
             }, () => {
                 this.props.onCancelButtonPress();
             });
@@ -116,9 +109,7 @@ export default class SearchBarAndroid extends PureComponent {
     };
 
     onChangeText = (value) => {
-        this.setState({value}, () => {
-            this.props.onChangeText(value);
-        });
+        this.props.onChangeText(value);
     };
 
     onSelectionChange = (event) => {
@@ -185,6 +176,7 @@ export default class SearchBarAndroid extends PureComponent {
                     backgroundColor && {backgroundColor},
                 ]}
             >
+                {!isFocused && this.props.leftComponent}
                 <View
                     style={[
                         styles.searchBar,
@@ -212,10 +204,11 @@ export default class SearchBarAndroid extends PureComponent {
                             color={tintColorSearch || placeholderTextColor}
                         />
                     }
-                    <QuickTextInput
+                    <TextInput
                         ref='input'
                         blurOnSubmit={blurOnSubmit}
-                        value={this.state.value}
+                        refocusInput={this.state.refocusInput}
+                        value={this.props.value}
                         autoCapitalize={autoCapitalize}
                         autoCorrect={false}
                         returnKeyType={returnKeyType || 'search'}

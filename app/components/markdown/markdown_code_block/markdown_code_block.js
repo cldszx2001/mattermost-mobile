@@ -3,7 +3,7 @@
 
 import {PropTypes} from 'prop-types';
 import React from 'react';
-import {injectIntl, intlShape} from 'react-intl';
+import {intlShape} from 'react-intl';
 import {
     Clipboard,
     StyleSheet,
@@ -14,6 +14,7 @@ import {
 
 import CustomPropTypes from 'app/constants/custom_prop_types';
 import FormattedText from 'app/components/formatted_text';
+import BottomSheet from 'app/utils/bottom_sheet';
 import {getDisplayNameForLanguage} from 'app/utils/markdown';
 import {preventDoubleTap} from 'app/utils/tap';
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
@@ -21,23 +22,26 @@ import mattermostManaged from 'app/mattermost_managed';
 
 const MAX_LINES = 4;
 
-class MarkdownCodeBlock extends React.PureComponent {
+export default class MarkdownCodeBlock extends React.PureComponent {
     static propTypes = {
-        intl: intlShape.isRequired,
         navigator: PropTypes.object.isRequired,
         theme: PropTypes.object.isRequired,
         language: PropTypes.string,
         content: PropTypes.string.isRequired,
         textStyle: CustomPropTypes.Style,
-        onLongPress: PropTypes.func.isRequired,
     };
 
     static defaultProps = {
         language: '',
     };
 
+    static contextTypes = {
+        intl: intlShape,
+    };
+
     handlePress = preventDoubleTap(() => {
-        const {intl, navigator, theme} = this.props;
+        const {navigator, theme} = this.props;
+        const {intl} = this.context;
 
         const languageDisplayName = getDisplayNameForLanguage(this.props.language);
         let title;
@@ -76,24 +80,27 @@ class MarkdownCodeBlock extends React.PureComponent {
     });
 
     handleLongPress = async () => {
-        const {formatMessage} = this.props.intl;
+        const {formatMessage} = this.context.intl;
 
-        const config = await mattermostManaged.getLocalConfig();
+        const config = mattermostManaged.getCachedConfig();
 
-        let action;
-        if (config.copyAndPasteProtection !== 'true') {
-            action = {
-                text: formatMessage({id: 'mobile.markdown.code.copy_code', defaultMessage: 'Copy Code'}),
-                onPress: this.handleCopyCode,
-            };
+        if (config?.copyAndPasteProtection !== 'true') {
+            const cancelText = formatMessage({id: 'mobile.post.cancel', defaultMessage: 'Cancel'});
+            const actionText = formatMessage({id: 'mobile.markdown.code.copy_code', defaultMessage: 'Copy Code'});
+            BottomSheet.showBottomSheetWithOptions({
+                options: [actionText, cancelText],
+                cancelButtonIndex: 1,
+            }, (value) => {
+                if (value !== 1) {
+                    this.handleCopyCode();
+                }
+            });
         }
-
-        this.props.onLongPress(action);
-    }
+    };
 
     handleCopyCode = () => {
         Clipboard.setString(this.props.content);
-    }
+    };
 
     trimContent = (content) => {
         const lines = content.split('\n');
@@ -238,5 +245,3 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
         },
     };
 });
-
-export default injectIntl(MarkdownCodeBlock);

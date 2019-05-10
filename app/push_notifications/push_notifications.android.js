@@ -1,9 +1,13 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {AppRegistry, AppState} from 'react-native';
+import {AppRegistry, AppState, NativeModules} from 'react-native';
 import {NotificationsAndroid, PendingNotifications} from 'react-native-notifications';
 import Notification from 'react-native-notifications/notification.android';
+
+import {emptyFunction} from 'app/utils/general';
+
+const {NotificationPreferences} = NativeModules;
 
 class PushNotification {
     constructor() {
@@ -37,15 +41,16 @@ class PushNotification {
         AppRegistry.registerHeadlessTask('notificationReplied', () => async (deviceNotification) => {
             const notification = new Notification(deviceNotification);
             const data = notification.getData();
+            const completed = emptyFunction;
 
             if (this.onReply) {
-                this.onReply(data, data.text, parseInt(data.badge, 10) - parseInt(data.msg_count, 10));
+                this.onReply(data, data.text, parseInt(data.badge, 10) - parseInt(data.msg_count, 10), completed);
             } else {
                 this.deviceNotification = {
                     data,
                     text: data.text,
                     badge: parseInt(data.badge, 10) - parseInt(data.msg_count, 10),
-                    completed: true, // used to identify that the notification belongs to a reply
+                    completed, // used to identify that the notification belongs to a reply
                 };
             }
         });
@@ -116,6 +121,14 @@ class PushNotification {
 
     resetNotification() {
         this.deviceNotification = null;
+    }
+
+    async clearChannelNotifications(channelId) {
+        const notifications = await NotificationPreferences.getDeliveredNotifications();
+        const notificationForChannel = notifications.find((n) => n.channel_id === channelId);
+        if (notificationForChannel) {
+            NotificationPreferences.removeDeliveredNotifications(notificationForChannel.identifier, channelId);
+        }
     }
 }
 

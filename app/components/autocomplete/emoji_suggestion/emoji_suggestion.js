@@ -5,6 +5,7 @@ import React, {Component} from 'react';
 import PropTypes from 'prop-types';
 import {
     FlatList,
+    Platform,
     Text,
     TouchableOpacity,
     View,
@@ -29,6 +30,7 @@ export default class EmojiSuggestion extends Component {
         emojis: PropTypes.array.isRequired,
         isSearch: PropTypes.bool,
         fuse: PropTypes.object.isRequired,
+        maxListHeight: PropTypes.number,
         theme: PropTypes.object.isRequired,
         onChangeText: PropTypes.func.isRequired,
         onResultCountChange: PropTypes.func.isRequired,
@@ -132,13 +134,28 @@ export default class EmojiSuggestion extends Component {
             actions.addReactionToLatestPost(emoji, rootId);
             onChangeText('');
         } else {
-            let completedDraft = emojiPart.replace(EMOJI_REGEX_WITHOUT_PREFIX, `:${emoji}: `);
+            // We are going to set a double : on iOS to prevent the auto correct from taking over and replacing it
+            // with the wrong value, this is a hack but I could not found another way to solve it
+            let completedDraft;
+            if (Platform.OS === 'ios') {
+                completedDraft = emojiPart.replace(EMOJI_REGEX_WITHOUT_PREFIX, `::${emoji}: `);
+            } else {
+                completedDraft = emojiPart.replace(EMOJI_REGEX_WITHOUT_PREFIX, `:${emoji}: `);
+            }
 
             if (value.length > cursorPosition) {
                 completedDraft += value.substring(cursorPosition);
             }
 
             onChangeText(completedDraft);
+
+            if (Platform.OS === 'ios') {
+                // This is the second part of the hack were we replace the double : with just one
+                // after the auto correct vanished
+                setTimeout(() => {
+                    onChangeText(completedDraft.replace(`::${emoji}: `, `:${emoji}: `));
+                });
+            }
         }
 
         this.setState({
@@ -171,18 +188,20 @@ export default class EmojiSuggestion extends Component {
     getItemLayout = ({index}) => ({length: 40, offset: 40 * index, index})
 
     render() {
+        const {maxListHeight, theme} = this.props;
+
         if (!this.state.active) {
             // If we are not in an active state return null so nothing is rendered
             // other components are not blocked.
             return null;
         }
 
-        const style = getStyleFromTheme(this.props.theme);
+        const style = getStyleFromTheme(theme);
 
         return (
             <FlatList
                 keyboardShouldPersistTaps='always'
-                style={style.listView}
+                style={[style.listView, {maxHeight: maxListHeight}]}
                 extraData={this.state}
                 data={this.state.dataSource}
                 keyExtractor={this.keyExtractor}

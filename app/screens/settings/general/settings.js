@@ -17,6 +17,7 @@ import StatusBar from 'app/components/status_bar';
 import {preventDoubleTap} from 'app/utils/tap';
 import {changeOpacity, makeStyleSheetFromTheme, setNavigatorStyles} from 'app/utils/theme';
 import {isValidUrl} from 'app/utils/url';
+import {t} from 'app/utils/i18n';
 
 import LocalConfig from 'assets/config';
 
@@ -32,7 +33,7 @@ class Settings extends PureComponent {
         currentUrl: PropTypes.string.isRequired,
         errors: PropTypes.array.isRequired,
         intl: intlShape.isRequired,
-        joinableTeams: PropTypes.object.isRequired,
+        joinableTeams: PropTypes.array.isRequired,
         navigator: PropTypes.object,
         theme: PropTypes.object,
     };
@@ -40,12 +41,6 @@ class Settings extends PureComponent {
     constructor(props) {
         super(props);
         this.props.navigator.setOnNavigatorEvent(this.onNavigatorEvent);
-    }
-
-    componentWillReceiveProps(nextProps) {
-        if (this.props.theme !== nextProps.theme) {
-            setNavigatorStyles(this.props.navigator, nextProps.theme);
-        }
     }
 
     errorEmailBody = () => {
@@ -179,6 +174,10 @@ class Settings extends PureComponent {
     });
 
     onNavigatorEvent = (event) => {
+        if (event.id === 'willAppear') {
+            setNavigatorStyles(this.props.navigator, this.props.theme);
+        }
+
         if (event.type === 'NavBarButtonPress') {
             if (event.id === 'close-settings') {
                 this.props.navigator.dismissModal({
@@ -216,7 +215,7 @@ class Settings extends PureComponent {
     render() {
         const {config, joinableTeams, theme} = this.props;
         const style = getStyleSheet(theme);
-        const showTeams = Object.keys(joinableTeams).length > 0;
+        const showTeams = joinableTeams.length > 0;
         const showHelp = isValidUrl(config.HelpLink);
         const showArrow = Platform.OS === 'ios';
 
@@ -230,7 +229,7 @@ class Settings extends PureComponent {
                     <View style={style.divider}/>
                     <SettingsItem
                         defaultMessage='Notifications'
-                        i18nId='user.settings.modal.notifications'
+                        i18nId={t('user.settings.modal.notifications')}
                         iconName='ios-notifications'
                         iconType='ion'
                         onPress={this.goToNotifications}
@@ -239,7 +238,7 @@ class Settings extends PureComponent {
                     />
                     <SettingsItem
                         defaultMessage='Display'
-                        i18nId='user.settings.modal.display'
+                        i18nId={t('user.settings.modal.display')}
                         iconName='ios-apps'
                         iconType='ion'
                         onPress={this.goToDisplaySettings}
@@ -249,7 +248,7 @@ class Settings extends PureComponent {
                     {showTeams &&
                     <SettingsItem
                         defaultMessage='Open teams you can join'
-                        i18nId='mobile.select_team.join_open'
+                        i18nId={t('mobile.select_team.join_open')}
                         iconName='list'
                         iconType='foundation'
                         onPress={this.goToSelectTeam}
@@ -260,7 +259,7 @@ class Settings extends PureComponent {
                     {showHelp &&
                     <SettingsItem
                         defaultMessage='Help'
-                        i18nId='mobile.help.title'
+                        i18nId={t('mobile.help.title')}
                         iconName='md-help'
                         iconType='ion'
                         onPress={this.openHelp}
@@ -270,7 +269,7 @@ class Settings extends PureComponent {
                     }
                     <SettingsItem
                         defaultMessage='Report a Problem'
-                        i18nId='sidebar_right_menu.report'
+                        i18nId={t('sidebar_right_menu.report')}
                         iconName='exclamation'
                         iconType='fontawesome'
                         onPress={this.openErrorEmail}
@@ -279,7 +278,7 @@ class Settings extends PureComponent {
                     />
                     <SettingsItem
                         defaultMessage='Advanced Settings'
-                        i18nId='mobile.advanced_settings.title'
+                        i18nId={t('mobile.advanced_settings.title')}
                         iconName='ios-hammer'
                         iconType='ion'
                         onPress={this.goToAdvancedSettings}
@@ -289,7 +288,7 @@ class Settings extends PureComponent {
                     {LocalConfig.EnableMobileClientUpgrade && LocalConfig.EnableMobileClientUpgradeUserSetting &&
                     <SettingsItem
                         defaultMessage='Check for Upgrade'
-                        i18nId='mobile.settings.modal.check_for_upgrade'
+                        i18nId={t('mobile.settings.modal.check_for_upgrade')}
                         iconName='update'
                         iconType='material'
                         onPress={this.goToClientUpgrade}
@@ -299,7 +298,7 @@ class Settings extends PureComponent {
                     }
                     <SettingsItem
                         defaultMessage='About Mattermost'
-                        i18nId='about.title'
+                        i18nId={t('about.title')}
                         iconName='ios-information-circle'
                         iconType='ion'
                         onPress={this.goToAbout}

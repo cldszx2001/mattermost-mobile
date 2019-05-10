@@ -8,9 +8,10 @@ import {
     Text,
     View,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome';
 
 import {General} from 'mattermost-redux/constants';
+
+import Icon from 'app/components/vector_icon';
 
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
 
@@ -19,13 +20,14 @@ export default class ChannelIcon extends React.PureComponent {
         isActive: PropTypes.bool,
         isInfo: PropTypes.bool,
         isUnread: PropTypes.bool,
+        hasDraft: PropTypes.bool,
         membersCount: PropTypes.number,
         size: PropTypes.number,
         status: PropTypes.string,
-        teammateDeletedAt: PropTypes.number,
         theme: PropTypes.object.isRequired,
         type: PropTypes.string.isRequired,
         isArchived: PropTypes.bool.isRequired,
+        isBot: PropTypes.bool.isRequired,
     };
 
     static defaultProps = {
@@ -40,13 +42,14 @@ export default class ChannelIcon extends React.PureComponent {
             isActive,
             isUnread,
             isInfo,
+            hasDraft,
             membersCount,
             size,
             status,
-            teammateDeletedAt,
             theme,
             type,
             isArchived,
+            isBot,
         } = this.props;
         const style = getStyleSheet(theme);
 
@@ -83,6 +86,23 @@ export default class ChannelIcon extends React.PureComponent {
                 <Icon
                     name='archive'
                     style={[style.icon, unreadIcon, activeIcon, {fontSize: size}]}
+                    type='fontawesome'
+                />
+            );
+        } else if (isBot) {
+            icon = (
+                <Icon
+                    name='robot'
+                    style={[style.icon, unreadIcon, activeIcon, {fontSize: size}, style.iconBot]}
+                    type='fontawesome5'
+                />
+            );
+        } else if (hasDraft) {
+            icon = (
+                <Icon
+                    name='pencil'
+                    style={[style.icon, unreadIcon, activeIcon, {fontSize: size}]}
+                    type='fontawesome'
                 />
             );
         } else if (type === General.OPEN_CHANNEL) {
@@ -90,6 +110,7 @@ export default class ChannelIcon extends React.PureComponent {
                 <Icon
                     name='globe'
                     style={[style.icon, unreadIcon, activeIcon, {fontSize: size}]}
+                    type='fontawesome'
                 />
             );
         } else if (type === General.PRIVATE_CHANNEL) {
@@ -97,6 +118,7 @@ export default class ChannelIcon extends React.PureComponent {
                 <Icon
                     name='lock'
                     style={[style.icon, unreadIcon, activeIcon, {fontSize: size}]}
+                    type='fontawesome'
                 />
             );
         } else if (type === General.GM_CHANNEL) {
@@ -106,13 +128,6 @@ export default class ChannelIcon extends React.PureComponent {
                         {membersCount}
                     </Text>
                 </View>
-            );
-        } else if (type === General.DM_CHANNEL && teammateDeletedAt) {
-            icon = (
-                <Image
-                    source={require('assets/images/status/archive_avatar.png')}
-                    style={{width: size, height: size, tintColor: offlineColor}}
-                />
             );
         } else if (type === General.DM_CHANNEL) {
             switch (status) {
@@ -176,6 +191,9 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
         },
         iconInfo: {
             color: theme.centerChannelColor,
+        },
+        iconBot: {
+            marginLeft: -5,
         },
         groupBox: {
             alignSelf: 'flex-start',

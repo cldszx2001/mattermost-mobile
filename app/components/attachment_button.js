@@ -10,42 +10,72 @@ import {
     StyleSheet,
     TouchableOpacity,
 } from 'react-native';
+import RNFetchBlob from 'rn-fetch-blob';
+
 import Icon from 'react-native-vector-icons/Ionicons';
 import {DocumentPicker} from 'react-native-document-picker';
 import ImagePicker from 'react-native-image-picker';
 import Permissions from 'react-native-permissions';
 
+import {lookupMimeType} from 'mattermost-redux/utils/file_utils';
+
 import {PermissionTypes} from 'app/constants';
 import {changeOpacity} from 'app/utils/theme';
+import {t} from 'app/utils/i18n';
 
 const ShareExtension = NativeModules.MattermostShare;
 
 export default class AttachmentButton extends PureComponent {
     static propTypes = {
         blurTextBox: PropTypes.func.isRequired,
+        browseFileTypes: PropTypes.string,
+        validMimeTypes: PropTypes.array,
+        canBrowseFiles: PropTypes.bool,
+        canBrowsePhotoLibrary: PropTypes.bool,
+        canBrowseVideoLibrary: PropTypes.bool,
+        canTakePhoto: PropTypes.bool,
+        canTakeVideo: PropTypes.bool,
         children: PropTypes.node,
         fileCount: PropTypes.number,
         maxFileCount: PropTypes.number.isRequired,
+        maxFileSize: PropTypes.number.isRequired,
         navigator: PropTypes.object.isRequired,
         onShowFileMaxWarning: PropTypes.func,
+        onShowFileSizeWarning: PropTypes.func,
+        onShowUnsupportedMimeTypeWarning: PropTypes.func,
         theme: PropTypes.object.isRequired,
         uploadFiles: PropTypes.func.isRequired,
         wrapper: PropTypes.bool,
+        extraOptions: PropTypes.arrayOf(PropTypes.object),
     };
 
     static defaultProps = {
+        browseFileTypes: Platform.OS === 'ios' ? 'public.item' : '*/*',
+        validMimeTypes: [],
+        canBrowseFiles: true,
+        canBrowsePhotoLibrary: true,
+        canBrowseVideoLibrary: true,
+        canTakePhoto: true,
+        canTakeVideo: true,
         maxFileCount: 5,
+        extraOptions: null,
     };
 
     static contextTypes = {
         intl: intlShape.isRequired,
     };
 
-    attachFileFromCamera = async () => {
+    attachPhotoFromCamera = () => {
+        return this.attachFileFromCamera('photo', 'camera');
+    };
+
+    attachFileFromCamera = async (mediaType, source) => {
         const {formatMessage} = this.context.intl;
         const options = {
-            quality: 1.0,
+            quality: 0.8,
+            videoQuality: 'high',
             noData: true,
+            mediaType,
             storageOptions: {
                 cameraRoll: true,
                 waitUntilSaved: true,
@@ -67,7 +97,7 @@ export default class AttachmentButton extends PureComponent {
             },
         };
 
-        const hasPhotoPermission = await this.hasPhotoPermission();
+        const hasPhotoPermission = await this.hasPhotoPermission(source);
 
         if (hasPhotoPermission) {
             ImagePicker.launchCamera(options, (response) => {
@@ -83,7 +113,7 @@ export default class AttachmentButton extends PureComponent {
     attachFileFromLibrary = () => {
         const {formatMessage} = this.context.intl;
         const options = {
-            quality: 1.0,
+            quality: 0.8,
             noData: true,
             permissionDenied: {
                 title: formatMessage({
@@ -115,10 +145,14 @@ export default class AttachmentButton extends PureComponent {
         });
     };
 
+    attachVideoFromCamera = () => {
+        return this.attachFileFromCamera('video', 'camera');
+    };
+
     attachVideoFromLibraryAndroid = () => {
         const {formatMessage} = this.context.intl;
         const options = {
-            quality: 1.0,
+            videoQuality: 'high',
             mediaType: 'video',
             noData: true,
             permissionDenied: {
@@ -148,11 +182,12 @@ export default class AttachmentButton extends PureComponent {
     };
 
     attachFileFromFiles = async () => {
+        const {browseFileTypes} = this.props;
         const hasPermission = await this.hasStoragePermission();
 
         if (hasPermission) {
             DocumentPicker.show({
-                filetype: [Platform.OS === 'ios' ? 'public.item' : '*/*'],
+                filetype: [browseFileTypes],
             }, async (error, res) => {
                 if (error) {
                     return;
@@ -176,11 +211,11 @@ export default class AttachmentButton extends PureComponent {
         }
     };
 
-    hasPhotoPermission = async () => {
+    hasPhotoPermission = async (source) => {
         if (Platform.OS === 'ios') {
             const {formatMessage} = this.context.intl;
             let permissionRequest;
-            const hasPermissionToStorage = await Permissions.check('photo');
+            const hasPermissionToStorage = await Permissions.check(source || 'photo');
 
             switch (hasPermissionToStorage) {
             case PermissionTypes.UNDETERMINED:
@@ -265,13 +300,13 @@ export default class AttachmentButton extends PureComponent {
                         defaultMessage: 'To upload images from your Android device, please change your permission settings.',
                     }),
                     [
-                        grantOption,
                         {
                             text: formatMessage({
                                 id: 'mobile.android.permission_denied_dismiss',
                                 defaultMessage: 'Dismiss',
                             }),
                         },
+                        grantOption,
                     ]
                 );
                 return false;
@@ -282,8 +317,27 @@ export default class AttachmentButton extends PureComponent {
         return true;
     };
 
-    uploadFiles = (images) => {
-        this.props.uploadFiles(images);
+    uploadFiles = async (files) => {
+        const file = files[0];
+        if (!file.fileSize | !file.fileName) {
+            const path = (file.path || file.uri).replace('file://', '');
+            const fileInfo = await RNFetchBlob.fs.stat(path);
+            file.fileSize = fileInfo.size;
+            file.fileName = fileInfo.filename;
+        }
+
+        if (!file.type) {
+            file.type = lookupMimeType(file.fileName);
+        }
+
+        const {validMimeTypes} = this.props;
+        if (validMimeTypes.length && !validMimeTypes.includes(file.type)) {
+            this.props.onShowUnsupportedMimeTypeWarning();
+        } else if (file.fileSize > this.props.maxFileSize) {
+            this.props.onShowFileSizeWarning(file.fileName);
+        } else {
+            this.props.uploadFiles(files);
+        }
     };
 
     handleFileAttachmentOption = (action) => {
@@ -302,7 +356,17 @@ export default class AttachmentButton extends PureComponent {
     };
 
     showFileAttachmentOptions = () => {
-        const {fileCount, maxFileCount, onShowFileMaxWarning} = this.props;
+        const {
+            canBrowseFiles,
+            canBrowsePhotoLibrary,
+            canBrowseVideoLibrary,
+            canTakePhoto,
+            canTakeVideo,
+            fileCount,
+            maxFileCount,
+            onShowFileMaxWarning,
+            extraOptions,
+        } = this.props;
 
         if (fileCount === maxFileCount) {
             onShowFileMaxWarning();
@@ -310,50 +374,77 @@ export default class AttachmentButton extends PureComponent {
         }
 
         this.props.blurTextBox();
-        const options = {
-            items: [{
-                action: () => this.handleFileAttachmentOption(this.attachFileFromCamera),
+        const items = [];
+
+        if (canTakePhoto) {
+            items.push({
+                action: () => this.handleFileAttachmentOption(this.attachPhotoFromCamera),
                 text: {
-                    id: 'mobile.file_upload.camera',
-                    defaultMessage: 'Take Photo or Video',
+                    id: t('mobile.file_upload.camera_photo'),
+                    defaultMessage: 'Take Photo',
                 },
                 icon: 'camera',
-            }, {
+            });
+        }
+
+        if (canTakeVideo) {
+            items.push({
+                action: () => this.handleFileAttachmentOption(this.attachVideoFromCamera),
+                text: {
+                    id: t('mobile.file_upload.camera_video'),
+                    defaultMessage: 'Take Video',
+                },
+                icon: 'video-camera',
+            });
+        }
+
+        if (canBrowsePhotoLibrary) {
+            items.push({
                 action: () => this.handleFileAttachmentOption(this.attachFileFromLibrary),
                 text: {
-                    id: 'mobile.file_upload.library',
+                    id: t('mobile.file_upload.library'),
                     defaultMessage: 'Photo Library',
                 },
                 icon: 'photo',
-            }],
-        };
+            });
+        }
 
-        if (Platform.OS === 'android') {
-            options.items.push({
+        if (canBrowseVideoLibrary && Platform.OS === 'android') {
+            items.push({
                 action: () => this.handleFileAttachmentOption(this.attachVideoFromLibraryAndroid),
                 text: {
-                    id: 'mobile.file_upload.video',
+                    id: t('mobile.file_upload.video'),
                     defaultMessage: 'Video Library',
                 },
                 icon: 'file-video-o',
             });
         }
 
-        options.items.push({
-            action: () => this.handleFileAttachmentOption(this.attachFileFromFiles),
-            text: {
-                id: 'mobile.file_upload.browse',
-                defaultMessage: 'Browse Files',
-            },
-            icon: 'file',
-        });
+        if (canBrowseFiles) {
+            items.push({
+                action: () => this.handleFileAttachmentOption(this.attachFileFromFiles),
+                text: {
+                    id: t('mobile.file_upload.browse'),
+                    defaultMessage: 'Browse Files',
+                },
+                icon: 'file',
+            });
+        }
+
+        if (extraOptions) {
+            extraOptions.forEach((option) => {
+                if (option !== null) {
+                    items.push(option);
+                }
+            });
+        }
 
         this.props.navigator.showModal({
             screen: 'OptionsModal',
             title: '',
             animationType: 'none',
             passProps: {
-                items: options.items,
+                items,
             },
             navigatorStyle: {
                 navBarHidden: true,
@@ -411,4 +502,3 @@ const style = StyleSheet.create({
         justifyContent: 'center',
     },
 });
-
